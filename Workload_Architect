@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workload Architect AI — Dell Infrastructure Recommendation Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A1018; --ink-2:#0E1724; --ink-3:#13202F; --ink-4:#172A3D;
+    --grid:rgba(79,138,200,.10);
+    --line:#1C2C42; --line-2:#28405E;
+    --cyan:#54C7F0; --blue:#2A93E8; --blue-deep:#0A66C2;
+    --amber:#F2A53C; --amber-soft:rgba(242,165,60,.14);
+    --green:#46C99B; --red:#FF6B6B; --warn:#FFB454;
+    --text:#DCE6F2; --muted:#8499B6; --faint:#5C7090;
+    --display:'Chakra Petch',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:var(--body); font-size:15px; line-height:1.5;
+    background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:34px 34px; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 22px}
+
+  header.topbar{border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(10,16,24,.96),rgba(10,16,24,.82));backdrop-filter:blur(6px);position:sticky;top:0;z-index:40}
+  .topbar .wrap{display:flex;align-items:center;gap:16px;padding-top:14px;padding-bottom:14px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{width:38px;height:38px;border-radius:8px;flex:none;background:linear-gradient(135deg,var(--blue),var(--blue-deep));display:grid;place-items:center;font-family:var(--display);font-weight:700;color:#fff;font-size:19px;box-shadow:0 0 0 1px rgba(84,199,240,.25),0 6px 18px rgba(10,102,194,.35)}
+  .brand h1{font-family:var(--display);font-weight:700;font-size:18px;margin:0;letter-spacing:.3px}
+  .brand .sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:1.5px;text-transform:uppercase}
+  .topbar .spacer{flex:1}
+  .reality-badge{display:flex;align-items:center;gap:8px;border:1px solid var(--line-2);border-radius:100px;padding:7px 14px;font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:.5px;background:rgba(70,201,155,.06)}
+  .reality-badge .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  @media(max-width:760px){.reality-badge{display:none}}
+
+  .hero{padding:46px 0 30px;position:relative;overflow:hidden}
+  .hero .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:3px;text-transform:uppercase;color:var(--cyan);margin-bottom:18px}
+  .hero h2{font-family:var(--display);font-weight:700;font-size:clamp(30px,5vw,52px);line-height:1.04;margin:0 0 18px;max-width:18ch;letter-spacing:-.5px}
+  .hero h2 .hl{color:var(--amber)}
+  .hero p.lede{max-width:60ch;color:var(--muted);font-size:17px;margin:0}
+  .hero .scan{position:absolute;right:-40px;top:0;bottom:0;width:46%;pointer-events:none;opacity:.5;background:repeating-linear-gradient(115deg,transparent 0 26px,rgba(84,199,240,.05) 26px 27px);mask:linear-gradient(90deg,transparent,#000 60%)}
+  @media(max-width:760px){.hero .scan{display:none}}
+
+  .console{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;padding-bottom:18px;align-items:start}
+  @media(max-width:980px){.console{grid-template-columns:1fr}}
+  .panel{background:linear-gradient(180deg,var(--ink-2),rgba(14,23,36,.7));border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+  .panel-head .ix{font-family:var(--mono);font-size:11px;color:var(--amber);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;letter-spacing:1px}
+  .panel-head h3{font-family:var(--display);font-weight:600;font-size:14.5px;margin:0;letter-spacing:.4px;text-transform:uppercase}
+  .panel-head .hint{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.5px}
+  .panel-body{padding:18px}
+
+  .tpl-label{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:0 0 11px}
+  .tpls{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:22px}
+  @media(max-width:520px){.tpls{grid-template-columns:repeat(2,1fr)}}
+  .tpl{text-align:left;cursor:pointer;border:1px solid var(--line);background:var(--ink-3);border-radius:9px;padding:11px 12px;color:var(--text);font-family:var(--body);transition:.15s}
+  .tpl:hover{border-color:var(--line-2);transform:translateY(-1px)}
+  .tpl.active{border-color:var(--blue);background:rgba(42,147,232,.10);box-shadow:0 0 0 1px rgba(42,147,232,.35)}
+  .tpl .tn{font-weight:600;font-size:13px;display:block;margin-bottom:2px}
+  .tpl .td{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.3px}
+
+  .field{margin-bottom:16px}
+  .field > label{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:7px;letter-spacing:.2px}
+  .field .unit{font-family:var(--mono);font-size:10.5px;color:var(--faint);font-weight:400}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:520px){.row2{grid-template-columns:1fr}}
+  input[type=number],select{width:100%;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:14px;padding:10px 12px;outline:none;transition:.15s}
+  input[type=number]:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(42,147,232,.18)}
+  select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%238499B6' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+  input[type=range]{width:100%;accent-color:var(--amber);margin-top:4px}
+  .rangeval{font-family:var(--mono);color:var(--amber);font-size:11px}
+  .build-btn{width:100%;margin-top:6px;border:none;cursor:pointer;border-radius:9px;padding:13px;font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.6px;text-transform:uppercase;color:#06121f;background:linear-gradient(135deg,var(--amber),#f5b860);box-shadow:0 8px 22px rgba(242,165,60,.28);transition:.15s}
+  .build-btn:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(242,165,60,.4)}
+  .auto-note{text-align:center;font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:10px;letter-spacing:.5px}
+
+  .rec-grid{display:grid;grid-template-columns:128px 1fr;gap:16px}
+  @media(max-width:520px){.rec-grid{grid-template-columns:96px 1fr}}
+  .rack{border:2px solid var(--line-2);border-radius:8px;background:linear-gradient(180deg,#060c14,#0a131e);padding:7px 6px;position:relative}
+  .rack::before{content:"42U";position:absolute;top:-9px;left:8px;font-family:var(--mono);font-size:9px;color:var(--faint);background:var(--ink-2);padding:0 5px;letter-spacing:1px}
+  .ru{display:flex;align-items:center;justify-content:center;border-radius:3px;font-family:var(--mono);font-size:8.5px;letter-spacing:.3px;color:#06121f;margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:0 4px;font-weight:600}
+  .ru.compute{background:linear-gradient(90deg,#2a93e8,#56b0f0)}
+  .ru.ai{background:linear-gradient(90deg,#b06bff,#c994ff)}
+  .ru.store{background:linear-gradient(90deg,#46c99b,#6fdcb7)}
+  .ru.net{background:linear-gradient(90deg,#f2a53c,#f7c074)}
+  .ru.empty{background:repeating-linear-gradient(45deg,#0c1622,#0c1622 5px,#0e1a28 5px,#0e1a28 10px);color:var(--faint);border:1px dashed var(--line)}
+  .rack-cap{font-family:var(--mono);font-size:9px;color:var(--faint);text-align:center;margin-top:6px;letter-spacing:.5px}
+
+  .stack-list{display:flex;flex-direction:column;gap:9px}
+  .stack-item{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--ink-3)}
+  .stack-item .sw{width:9px;align-self:stretch;border-radius:3px;flex:none}
+  .sw.compute{background:var(--blue)} .sw.ai{background:#b06bff} .sw.store{background:var(--green)} .sw.net{background:var(--amber)}
+  .stack-item .meta{flex:1;min-width:0}
+  .stack-item .sn{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .stack-item .qty{font-family:var(--mono);font-size:10px;color:var(--amber);border:1px solid var(--line-2);border-radius:4px;padding:1px 6px}
+  .stack-item .sd{font-size:12px;color:var(--muted);margin-top:3px}
+  .stack-item .specs{display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .stack-item .specs b{color:var(--cyan);font-weight:500}
+  .src-note{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:14px;letter-spacing:.3px;line-height:1.6;border-top:1px dashed var(--line);padding-top:12px}
+
+  /* build configurator */
+  .build-panel{margin-bottom:30px}
+  .cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px}
+  .cfg-field label{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:7px}
+  .cfg-field .cfg-unit{font-family:var(--mono);font-size:10px;color:var(--faint);font-weight:400}
+  .cfg-field select,.cfg-field input{width:100%;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:10px 12px;outline:none;transition:.15s}
+  .cfg-field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%238499B6' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+  .cfg-field select:focus,.cfg-field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(42,147,232,.18)}
+  .cfg-summary{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px;display:flex;gap:22px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .cfg-summary b{color:var(--cyan);font-weight:500}
+  .cfg-summary .price{color:var(--amber)}
+
+  /* assumptions */
+  details.assump-panel{margin-bottom:30px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2);overflow:hidden}
+  details.assump-panel summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:11px;padding:15px 18px;font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:.4px;text-transform:uppercase}
+  details.assump-panel summary::-webkit-details-marker{display:none}
+  details.assump-panel summary .ix{font-family:var(--mono);font-size:11px;color:var(--amber);border:1px solid var(--line-2);border-radius:5px;padding:2px 7px;letter-spacing:1px}
+  details.assump-panel summary .chev{margin-left:auto;color:var(--muted);font-family:var(--mono);transition:.2s}
+  details.assump-panel[open] summary .chev{transform:rotate(180deg)}
+  details.assump-panel summary .sh{font-family:var(--body);font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint);font-size:12px;margin-left:4px}
+  .abody{border-top:1px solid var(--line);padding:18px}
+  .agroup{margin-bottom:20px}
+  .agroup:last-child{margin-bottom:0}
+  .agroup .ah{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin:0 0 12px}
+  .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:13px}
+  .afield label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:5px;line-height:1.3}
+  .afield input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 10px;outline:none}
+  .afield input:focus{border-color:var(--blue)}
+  .areset{margin-top:6px;cursor:pointer;background:transparent;border:1px solid var(--line-2);color:var(--muted);border-radius:7px;padding:8px 14px;font-family:var(--mono);font-size:11px;letter-spacing:.5px}
+  .areset:hover{border-color:var(--cyan);color:var(--cyan)}
+
+  .section{padding:40px 0;border-top:1px solid var(--line)}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+  .sec-head .num{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:2px}
+  .sec-head h3{font-family:var(--display);font-weight:700;font-size:24px;margin:0;letter-spacing:-.2px}
+  .sec-head .ln{flex:1;height:1px;background:var(--line)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.compare{grid-template-columns:1fr}}
+  .col{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .col.legacy .col-head{background:rgba(255,107,107,.07);border-bottom:1px solid rgba(255,107,107,.2)}
+  .col.dell .col-head{background:rgba(42,147,232,.09);border-bottom:1px solid rgba(42,147,232,.28)}
+  .col-head{padding:15px 18px}
+  .col-head .tag{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+  .col.legacy .col-head .tag{color:var(--red)}
+  .col.dell .col-head .tag{color:var(--blue)}
+  .col-head .ct2{font-family:var(--display);font-weight:600;font-size:17px;margin-top:3px}
+  .col-body{padding:8px 18px 16px}
+  .crow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px;gap:12px}
+  .crow:last-child{border-bottom:none}
+  .crow .k{color:var(--muted)}
+  .crow .v{font-family:var(--mono);font-size:13px;text-align:right}
+  .crow .v.good{color:var(--green)} .crow .v.bad{color:var(--red)}
+
+  .gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  @media(max-width:520px){.gauges{grid-template-columns:repeat(2,1fr)}}
+  .gauge{border:1px solid var(--line);border-radius:9px;padding:11px;background:var(--ink-3);text-align:center}
+  .gauge .gv{font-family:var(--display);font-weight:700;font-size:21px;line-height:1}
+  .gauge .gl{font-family:var(--mono);font-size:9.5px;color:var(--faint);letter-spacing:1px;text-transform:uppercase;margin-top:5px}
+  .gauge .gbar{height:4px;border-radius:3px;background:var(--line);margin-top:9px;overflow:hidden}
+  .gauge .gbar > i{display:block;height:100%;border-radius:3px}
+
+  .checks{display:flex;flex-direction:column;gap:8px}
+  .check{display:flex;gap:11px;align-items:flex-start;border-radius:9px;padding:11px 12px;border:1px solid var(--line);background:var(--ink-3)}
+  .check.ok{border-color:rgba(70,201,155,.35);background:rgba(70,201,155,.05)}
+  .check.warn{border-color:rgba(255,180,84,.4);background:rgba(255,180,84,.06)}
+  .check.crit{border-color:rgba(255,107,107,.45);background:rgba(255,107,107,.07)}
+  .check .ic{font-family:var(--mono);font-weight:700;font-size:13px;width:22px;height:22px;border-radius:5px;display:grid;place-items:center;flex:none}
+  .check.ok .ic{color:var(--green);border:1px solid var(--green)}
+  .check.warn .ic{color:var(--warn);border:1px solid var(--warn)}
+  .check.crit .ic{color:var(--red);border:1px solid var(--red)}
+  .check .ct{font-size:12.5px;line-height:1.45}
+  .check .ct b{color:var(--text)}
+
+  .perf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:760px){.perf-grid{grid-template-columns:repeat(2,1fr)}}
+  .perf{border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--ink-2)}
+  .perf .pv{font-family:var(--display);font-weight:700;font-size:26px;color:var(--cyan)}
+  .perf .pl{font-size:12px;color:var(--muted);margin-top:6px}
+  .perf .pn{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:8px}
+
+  .tco-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:22px;align-items:start}
+  @media(max-width:880px){.tco-grid{grid-template-columns:1fr}}
+  .tco-chart{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--ink-2)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .tco-stats{display:flex;flex-direction:column;gap:12px}
+  .bigstat{border:1px solid var(--line);border-radius:14px;padding:18px;background:linear-gradient(180deg,var(--ink-3),var(--ink-2))}
+  .bigstat .bl{font-family:var(--mono);font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint)}
+  .bigstat .bv{font-family:var(--display);font-weight:700;font-size:32px;line-height:1.1;margin-top:6px}
+  .bigstat .bv.save{color:var(--green)}
+  .bigstat .bn{font-size:12px;color:var(--muted);margin-top:6px}
+  .assump-foot{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:16px;line-height:1.7}
+
+  .cta-band{border:1px solid var(--line);border-radius:16px;padding:30px;background:linear-gradient(135deg,rgba(42,147,232,.10),rgba(10,102,194,.04));display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+  .cta-band .ctext{flex:1;min-width:260px}
+  .cta-band h4{font-family:var(--display);font-weight:700;font-size:22px;margin:0 0 8px}
+  .cta-band p{color:var(--muted);margin:0;max-width:52ch}
+  .cta-actions{display:flex;gap:12px;flex-wrap:wrap}
+  .btn{cursor:pointer;border-radius:9px;padding:13px 20px;font-family:var(--display);font-weight:600;font-size:13.5px;letter-spacing:.5px;text-transform:uppercase;transition:.15s;border:1px solid transparent}
+  .btn.primary{background:linear-gradient(135deg,var(--blue),var(--blue-deep));color:#fff;box-shadow:0 8px 22px rgba(10,102,194,.32)}
+  .btn.primary:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent;border-color:var(--line-2);color:var(--text)}
+  .btn.ghost:hover{border-color:var(--cyan);color:var(--cyan)}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(4,8,14,.72);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:22px}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--ink-2);border:1px solid var(--line-2);border-radius:16px;max-width:620px;width:100%;max-height:88vh;overflow:auto}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--ink-2)}
+  .modal-head h3{font-family:var(--display);font-weight:700;font-size:17px;margin:0;flex:1}
+  .modal-head .x{cursor:pointer;background:none;border:1px solid var(--line-2);color:var(--muted);border-radius:7px;width:30px;height:30px;font-size:16px}
+  .modal-body{padding:22px}
+  .quote-pre{font-family:var(--mono);font-size:12px;line-height:1.7;white-space:pre-wrap;background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:16px;color:var(--text);max-height:380px;overflow:auto}
+  .copy-row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+
+  footer{border-top:1px solid var(--line);padding:26px 0;color:var(--faint);font-family:var(--mono);font-size:11px;letter-spacing:.4px;text-align:center;line-height:1.8}
+
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">W</div>
+      <div>
+        <h1>Workload Architect AI</h1>
+        <div class="sub">Dell PowerEdge · PowerStore Recommendation Engine</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="reality-badge"><span class="dot"></span>Mechanical reality check: ON</div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="scan"></div>
+  <div class="wrap">
+    <div class="eyebrow">Pre-sales architecture · Government &amp; Education</div>
+    <h2>Tell it your workload. Get the <span class="hl">right iron</span> — sized, racked, and reality-checked.</h2>
+    <p class="lede">A free expert consultation in 60 seconds. Describe the district, campus, or agency workload and the engine returns an optimal PowerEdge + PowerStore stack — with the power, cooling, and rack realities most configurators conveniently ignore. Every number is yours to edit.</p>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="console">
+
+    <div class="panel" id="inputPanel">
+      <div class="panel-head"><span class="ix">IN</span><h3>Workload Profile</h3><span class="hint">edit anything — it recalculates live</span></div>
+      <div class="panel-body">
+        <p class="tpl-label">Start from a scenario</p>
+        <div class="tpls" id="tpls"></div>
+
+        <div class="row2">
+          <div class="field"><label>General-purpose VMs <span class="unit">count</span></label><input type="number" id="vms" min="0" value="120"></div>
+          <div class="field"><label>Concurrent users <span class="unit">peak</span></label><input type="number" id="users" min="0" value="1200"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Current data <span class="unit">TB logical</span></label><input type="number" id="data" min="0" value="60"></div>
+          <div class="field"><label>VDI / virtual desktops <span class="unit">seats</span></label><input type="number" id="vdi" min="0" value="0"></div>
+        </div>
+        <div class="field"><label>Annual data growth <span class="rangeval" id="growthVal">25%</span></label><input type="range" id="growth" min="5" max="60" step="5" value="25"></div>
+        <div class="row2">
+          <div class="field"><label>AI / ML ambition</label>
+            <select id="ai"><option value="none">None yet</option><option value="inference">Inference / pilot</option><option value="training">Model training</option><option value="serious">Serious GenAI / HPC</option></select></div>
+          <div class="field"><label>Database intensity</label>
+            <select id="db"><option value="none">Light / none</option><option value="standard" selected>Standard (SIS/ERP)</option><option value="heavy">Heavy OLTP / analytics</option></select></div>
+        </div>
+        <div class="field"><label>Resilience target</label>
+          <select id="res"><option value="single">Single site, basic HA</option><option value="n1" selected>Single site, N+1 redundancy</option><option value="dual">Two sites, replicated</option></select></div>
+
+        <button class="build-btn" id="buildBtn">Build my architecture →</button>
+        <div class="auto-note">Anonymized inputs only — no PII leaves this page</div>
+      </div>
+    </div>
+
+    <div class="panel" id="outPanel">
+      <div class="panel-head"><span class="ix">OUT</span><h3>Recommended Stack</h3><span class="hint" id="outHint">live elevation</span></div>
+      <div class="panel-body">
+        <div class="rec-grid">
+          <div><div class="rack" id="rack"></div><div class="rack-cap" id="rackCap">—</div></div>
+          <div class="stack-list" id="stackList"></div>
+        </div>
+        <div class="src-note" id="srcNote"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUILD CONFIGURATOR -->
+  <div class="panel build-panel" id="buildPanel">
+    <div class="panel-head"><span class="ix">CFG</span><h3>Configure the build</h3><span class="hint">internals apply to every compute node · live pricing</span></div>
+    <div class="panel-body">
+      <div class="cfg-grid">
+        <div class="cfg-field"><label>Processors (per node)</label><select id="cfgCpu"></select></div>
+        <div class="cfg-field"><label>Memory (per node)</label><select id="cfgRam"></select></div>
+        <div class="cfg-field"><label>Operating system</label><select id="cfgOs"></select></div>
+        <div class="cfg-field"><label>Networking</label><select id="cfgNic"></select></div>
+        <div class="cfg-field"><label>Local storage (per node)</label><select id="cfgLocal"></select></div>
+        <div class="cfg-field"><label>Storage appliance target <span class="cfg-unit">usable TB · 0 = auto</span></label><input type="number" id="cfgStore" min="0" value="0"></div>
+      </div>
+      <div class="cfg-summary" id="cfgSummary"></div>
+    </div>
+  </div>
+
+  <!-- ASSUMPTIONS -->
+  <details class="assump-panel" id="assumpPanel">
+    <summary><span class="ix">⚙</span>Assumptions &amp; pricing <span class="sh">— open to plug in your real Dell / SLED numbers and calibrate the engine</span><span class="chev">▾</span></summary>
+    <div class="abody" id="abody"></div>
+  </details>
+
+  <section class="section" id="realitySec">
+    <div class="sec-head"><span class="num">01</span><h3>Mechanical reality check</h3><span class="ln"></span></div>
+    <div class="gauges" id="gauges"></div>
+    <div class="checks" id="checks"></div>
+  </section>
+
+  <section class="section">
+    <div class="sec-head"><span class="num">02</span><h3>Projected performance</h3><span class="ln"></span></div>
+    <div class="perf-grid" id="perfGrid"></div>
+  </section>
+
+  <section class="section">
+    <div class="sec-head"><span class="num">03</span><h3>Status quo vs. Dell proposed</h3><span class="ln"></span></div>
+    <div class="compare" id="compare"></div>
+  </section>
+
+  <section class="section">
+    <div class="sec-head"><span class="num">04</span><h3>4-year total cost of ownership</h3><span class="ln"></span></div>
+    <div class="tco-grid">
+      <div class="tco-chart">
+        <div id="tcoSvg"></div>
+        <div class="legend">
+          <span><i style="background:#2a93e8"></i>Hardware (capex)</span>
+          <span><i style="background:#46c99b"></i>Support &amp; warranty</span>
+          <span><i style="background:#f2a53c"></i>Power &amp; cooling</span>
+          <span><i style="background:#ff6b6b"></i>Emergency refresh / risk</span>
+        </div>
+        <div class="assump-foot" id="assumpFoot"></div>
+      </div>
+      <div class="tco-stats" id="tcoStats"></div>
+    </div>
+  </section>
+
+  <section class="section" style="border-bottom:1px solid var(--line)">
+    <div class="cta-band">
+      <div class="ctext">
+        <h4>Like the shape of this? Make it real.</h4>
+        <p>Generate a clean preliminary quote request your Dell rep can turn into street pricing — or hand the whole architecture over for a refinement session.</p>
+      </div>
+      <div class="cta-actions">
+        <button class="btn primary" id="quoteBtn">Generate quote request</button>
+        <button class="btn ghost" id="refineBtn">Refine with my Dell rep</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    WORKLOAD ARCHITECT AI · PLANNING-GRADE ESTIMATES FOR PRE-SALES DISCOVERY<br>
+    Hardware specs verified against Dell datasheets (Jun 2026). Sizing ratios &amp; pricing are editable planning inputs — confirm final config, site survey &amp; SLED/EDU pricing with your Dell account team.
+  </div>
+</footer>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTitle">Preliminary quote request</h3><button class="x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="modal-body">
+      <div class="quote-pre" id="quoteText"></div>
+      <div class="copy-row"><button class="btn primary" id="copyBtn">Copy to clipboard</button><button class="btn ghost" id="closeBtn">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================ TEMPLATES ============================ */
+const TEMPLATES = [
+  {id:'k12',  name:'K-12 District',     desc:'1.2k students',  v:{vms:120,users:1200,data:60,vdi:0,growth:25,ai:'inference',db:'standard',res:'n1'}},
+  {id:'highed',name:'Higher-Ed Campus', desc:'research+admin', v:{vms:240,users:4000,data:220,vdi:300,growth:30,ai:'training',db:'heavy',res:'dual'}},
+  {id:'gov',  name:'City / County Gov', desc:'ERP + records',  v:{vms:90,users:600,data:90,vdi:150,growth:15,ai:'none',db:'heavy',res:'dual'}},
+  {id:'safety',name:'Public Safety / 911',desc:'CAD + video',  v:{vms:60,users:250,data:180,vdi:80,growth:40,ai:'inference',db:'heavy',res:'dual'}},
+  {id:'clinic',name:'Health / Clinic',  desc:'EHR + imaging',  v:{vms:80,users:500,data:140,vdi:200,growth:20,ai:'none',db:'heavy',res:'dual'}},
+  {id:'research',name:'Research / HPC',  desc:'GenAI lab',      v:{vms:40,users:120,data:300,vdi:0,growth:45,ai:'serious',db:'standard',res:'n1'}},
+];
+
+/* ============================ EDITABLE ASSUMPTIONS ============================ */
+/* defaults — every one is exposed in the Assumptions panel and re-runs the engine on change */
+const DEFAULTS = {
+  // sizing
+  vmsPerNode:40, vdiPerNode:120, coresPerNode:64, ramPerNodeTB:1,
+  // storage
+  drr:3, avgDriveTB:15.36, usableFactor:0.85,
+  // energy & support
+  powerRate:0.13, pue:1.5, circuitKW:4.9, supportPct:10, eduDiscount:35,
+  // status-quo model
+  sqPowerMult:2.1, sqBreakfixPct:18, sqRefreshFactor:0.6,
+  // pricing — LIST $ (pre-discount). Servers/GPUs anchored to Dell.com (Jun 2026);
+  // PowerStore & XE9680 are quote-only, so these are defensible street estimates.
+  pR760:9000, pR660:7500, pAiInf:56000, pAiTrain:92000, pXE9680:400000,
+  pNet:30000, pMgmt:9000,
+  p500T:95000, p1200T:175000, p3200T:290000, p5200T:400000, p9200T:560000, pShelf:55000,
+};
+let A = {...DEFAULTS};
+
+const ASSUMP_GROUPS = [
+  {title:'Sizing ratios (calibrate to your own deals)', fields:[
+    {k:'vmsPerNode',l:'VMs per compute node',s:1},
+    {k:'vdiPerNode',l:'VDI seats per node',s:5},
+  ]},
+  {title:'Storage model', fields:[
+    {k:'drr',l:'Data reduction ratio (X:1) — Dell guarantees up to 5',s:0.5},
+    {k:'avgDriveTB',l:'Avg NVMe drive size (TB)',s:1.92},
+    {k:'usableFactor',l:'Usable after resiliency (0–1)',s:0.05},
+  ]},
+  {title:'Energy & support', fields:[
+    {k:'powerRate',l:'Power rate ($/kWh)',s:0.01},
+    {k:'pue',l:'Facility PUE',s:0.1},
+    {k:'circuitKW',l:'Usable kW per 208V circuit',s:0.1},
+    {k:'supportPct',l:'ProSupport %/yr of hardware',s:1},
+    {k:'eduDiscount',l:'SLED/EDU discount % off list',s:5},
+  ]},
+  {title:'Status-quo comparison model', fields:[
+    {k:'sqPowerMult',l:'Legacy power vs new (×)',s:0.1},
+    {k:'sqBreakfixPct',l:'Legacy break-fix %/yr',s:1},
+    {k:'sqRefreshFactor',l:'Yr-3 refresh (× capex)',s:0.1},
+  ]},
+  {title:'Unit pricing — LIST $ (servers/GPUs ~Dell.com; arrays quote-only est.)', fields:[
+    {k:'pR760',l:'R760 base chassis (no CPU/RAM)',s:250},
+    {k:'pR660',l:'R660 base chassis (no CPU/RAM)',s:250},
+    {k:'pAiInf',l:'R760xa inference node',s:1000},
+    {k:'pAiTrain',l:'R760xa training node',s:1000},
+    {k:'pXE9680',l:'PowerEdge XE9680',s:5000},
+    {k:'pNet',l:'PowerSwitch (each)',s:500},
+    {k:'pMgmt',l:'Mgmt switch',s:250},
+    {k:'p500T',l:'PowerStore 500T',s:2000},
+    {k:'p1200T',l:'PowerStore 1200T',s:2000},
+    {k:'p3200T',l:'PowerStore 3200T',s:2000},
+    {k:'p5200T',l:'PowerStore 5200T',s:2000},
+    {k:'p9200T',l:'PowerStore 9200T',s:2000},
+    {k:'pShelf',l:'Expansion enclosure (ENS24)',s:1000},
+  ]},
+];
+
+/* ============================ HARDWARE FACTS (verified Jun 2026) ============================ */
+/* U-height, power & weight from Dell datasheets; prices come from editable A.* at build time */
+const HW = {
+  compute:  {model:'PowerEdge R760',  u:2, kw:1.2, lbs:75,  pk:'pR760'},
+  computeSm:{model:'PowerEdge R660',  u:1, kw:0.8, lbs:55,  pk:'pR660'},
+  aiInf:    {model:'PowerEdge R760xa',u:2, kw:1.6, lbs:80,  pk:'pAiInf',  gpu:'2× NVIDIA L40S 48GB'},
+  aiTrain:  {model:'PowerEdge R760xa',u:2, kw:2.4, lbs:85,  pk:'pAiTrain',gpu:'4× NVIDIA L40S 48GB'},
+  aiBig:    {model:'PowerEdge XE9680',u:6, kw:10.2,lbs:238, pk:'pXE9680', gpu:'8× NVIDIA H200 141GB (NVLink)'},
+  net:      {model:'PowerSwitch S5248F-ON', u:1, kw:0.3, lbs:22, pk:'pNet'},
+  mgmt:     {model:'PowerSwitch N3248 (mgmt)', u:1, kw:0.12, lbs:18, pk:'pMgmt'},
+};
+/* PowerStore Gen-2 controllers: tier = performance class (capacity added via shared ENS24 enclosures) */
+const STORE = [
+  {model:'PowerStore 500T', cores:24,  u:2, kw:1.0, lbs:80, pk:'p500T'},
+  {model:'PowerStore 1200T',cores:24,  u:2, kw:1.2, lbs:82, pk:'p1200T'},
+  {model:'PowerStore 3200T',cores:40,  u:2, kw:1.4, lbs:84, pk:'p3200T'},
+  {model:'PowerStore 5200T',cores:64,  u:2, kw:1.6, lbs:86, pk:'p5200T'},
+  {model:'PowerStore 9200T',cores:112, u:2, kw:1.8, lbs:88, pk:'p9200T'},
+];
+const SHELF = {u:2, kw:0.4, lbs:60, drives:24}; // ENS24 expansion enclosure
+const BASE_DRIVES = 25, MAX_SHELVES = 3;
+
+/* ============================ COMPONENT CATALOGS ============================ */
+/* Customer-selectable internals for the compute cluster. Prices = Dell list $ (per node).
+   CPU upgrade deltas & drive/GPU $ anchored to Dell.com (Jun 2026); RAM/OS/NIC are list estimates. */
+const CPUS = [ // priceEach = per processor; node = 2×
+  {id:'s4410', label:'2× Xeon Silver 4410Y — 12C, 150W',     coresEach:12, kwEach:0.15, priceEach:700},
+  {id:'g6430', label:'2× Xeon Gold 6430 — 32C, 270W',        coresEach:32, kwEach:0.27, priceEach:1900},
+  {id:'g6442y',label:'2× Xeon Gold 6442Y — 24C, 225W (fast)', coresEach:24, kwEach:0.22, priceEach:3900},
+  {id:'g6548n',label:'2× Xeon Gold 6548N — 32C, 250W',       coresEach:32, kwEach:0.25, priceEach:3900},
+  {id:'p8462y',label:'2× Xeon Platinum 8462Y+ — 32C, 300W',  coresEach:32, kwEach:0.30, priceEach:5500},
+  {id:'p8480', label:'2× Xeon Platinum 8480+ — 56C, 350W',   coresEach:56, kwEach:0.35, priceEach:8500},
+];
+const RAMS = [
+  {gb:256,  label:'256 GB DDR5', price:1400},
+  {gb:512,  label:'512 GB DDR5', price:2800},
+  {gb:1024, label:'1 TB DDR5',   price:5800},
+  {gb:2048, label:'2 TB DDR5',   price:13000},
+];
+const OSES = [
+  {id:'none',    label:'No OS / Ubuntu LTS',            price:0},
+  {id:'rhel',    label:'Red Hat Enterprise Linux (1yr)', price:899},
+  {id:'winstd',  label:'Windows Server 2022 Standard',   price:1069},
+  {id:'windc',   label:'Windows Server 2022 Datacenter', price:6155},
+  {id:'vsphere', label:'VMware vSphere (per node, est.)', price:5000},
+];
+const NICS = [
+  {id:'10g', label:'2× 10GbE (onboard LOM)',      speed:'10GbE',  price:0},
+  {id:'25g', label:'2× 25GbE adapter',            speed:'25GbE',  price:600},
+  {id:'100g',label:'2× 100GbE adapter',           speed:'100GbE', price:1500},
+  {id:'dpu', label:'BlueField-3 DPU 2× 200GbE',   speed:'200GbE', price:8137},
+];
+const LOCALS = [ // per-node local storage (primary data lives on PowerStore)
+  {id:'boot', label:'Boot only (SAN/vSAN-backed)', tb:0,    price:500},
+  {id:'2x192',label:'2× 1.92TB SAS SSD (RAID1)',   tb:1.92, price:4866},
+  {id:'4x384',label:'4× 3.84TB NVMe',              tb:15.4, price:19464},
+  {id:'8x768',label:'8× 7.68TB NVMe',              tb:61.4, price:73600},
+];
+const find=(arr,id)=>arr.find(x=>x.id===id)||arr[0];
+
+/* current build selections */
+let CONFIG = { cpu:'g6430', ram:512, os:'none', nic:'25g', local:'boot', storeTargetTB:0 };
+
+/* ============================ ENGINE ============================ */
+function recommend(inp){
+  const out={items:[], warnings:[], notes:[]};
+
+  // ---- compute sizing (internals from CONFIG) ----
+  const cpu=find(CPUS,CONFIG.cpu), ram=RAMS.find(r=>r.gb===+CONFIG.ram)||RAMS[1],
+        os=find(OSES,CONFIG.os), nic=find(NICS,CONFIG.nic), local=find(LOCALS,CONFIG.local);
+  const nodeCores = cpu.coresEach*2, nodeRamTB = ram.gb/1024;
+  let nodesVM  = inp.vms>0 ? Math.ceil(inp.vms / A.vmsPerNode) : 0;
+  let nodesVDI = inp.vdi>0 ? Math.ceil(inp.vdi / A.vdiPerNode) : 0;
+  let computeNodes = nodesVM + nodesVDI;
+  if((inp.vms>0||inp.users>0) && computeNodes<2) computeNodes=2;            // min cluster for HA
+  if(inp.res==='n1') computeNodes += 1;
+  if(inp.res==='dual') computeNodes = Math.max(computeNodes,2)*2;           // mirrored sites
+  const cm = computeNodes>=6 ? HW.computeSm : HW.compute;                   // dense 1U for big fleets
+  if(computeNodes>0){
+    const nodeKw = 0.55 + cpu.kwEach*2;                                     // chassis/mem/fans + CPUs
+    const nodePrice = A[cm.pk] + cpu.priceEach*2 + ram.price + os.price + nic.price + local.price;
+    out.items.push({...cm, type:'compute', qty:computeNodes, kw:+nodeKw.toFixed(2), price:nodePrice,
+      desc:`${cpu.label.replace('2× ','2× ')} · ${ram.label} · ${nic.speed}${local.tb?` · ${local.tb}TB local`:' · boot-only'} · ${os.label}`,
+      role: inp.vdi>0 ? 'Compute + VDI host cluster' : 'Compute / virtualization cluster'});
+  }
+
+  // ---- AI ----
+  if(inp.ai==='inference'){ out.items.push({...HW.aiInf,type:'ai',qty:1,desc:HW.aiInf.gpu+' · low-latency inference',role:'AI inference node'}); }
+  if(inp.ai==='training'){ out.items.push({...HW.aiTrain,type:'ai',qty:2,desc:HW.aiTrain.gpu+' each · fine-tuning capable',role:'AI training pair'}); }
+  if(inp.ai==='serious'){ out.items.push({...HW.aiBig,type:'ai',qty:1,desc:HW.aiBig.gpu+' · GenAI / HPC',role:'GenAI training platform'}); }
+
+  // ---- storage: tier by PERFORMANCE, capacity by ENCLOSURES ----
+  const iops = inp.vms*250 + inp.users*30 + inp.vdi*15 + (inp.db==='heavy'?200000:inp.db==='standard'?40000:0);
+  let tier;
+  if(iops<=40000 && inp.data<40) tier=0;          // 500T
+  else if(iops<=90000) tier=1;                     // 1200T
+  else if(iops<=190000) tier=2;                    // 3200T
+  else if(iops<=330000) tier=3;                    // 5200T
+  else tier=4;                                     // 9200T
+  if(inp.db==='heavy') tier=Math.max(tier,2);      // heavy DB → 3200T+
+  if(inp.ai==='serious') tier=Math.max(tier,3);    // HPC data pipeline → 5200T+
+  let pick = STORE[tier];
+
+  const grow = Math.pow(1+inp.growth/100, 4);
+  const autoUsableTB = ((inp.data + inp.vdi*0.05) * grow * 1.3) / A.drr;   // workload-derived usable need @ yr4
+  const targetUsableTB = CONFIG.storeTargetTB>0 ? CONFIG.storeTargetTB : autoUsableTB;
+  const physPerDrive = A.avgDriveTB * A.usableFactor;
+  const physBase = BASE_DRIVES * physPerDrive;
+  const physPerShelf = SHELF.drives * physPerDrive;
+  let shelves = Math.max(0, Math.ceil((targetUsableTB - physBase) / physPerShelf));
+  let appliances = 1;
+  if(shelves > MAX_SHELVES){ appliances = Math.ceil((shelves+1)/(MAX_SHELVES+1)); shelves = MAX_SHELVES; }
+  const dual = inp.res==='dual';
+  const storeQty = (dual?2:1)*appliances;
+  const usableTB = (physBase + shelves*physPerShelf) * appliances;
+  const effectiveTB = usableTB * A.drr;
+
+  out.store={tier, model:pick.model, qty:storeQty, shelves, effectiveTB, usableTB, iops};
+  out.items.push({...pick, type:'store', qty:storeQty,
+    u:pick.u + shelves*SHELF.u, kw:pick.kw + shelves*SHELF.kw, lbs:pick.lbs + shelves*SHELF.lbs,
+    desc:`~${Math.round(usableTB).toLocaleString()}TB usable / ~${Math.round(effectiveTB).toLocaleString()}TB effective @ ${A.drr}:1${dual?' · async replicated':''}${shelves?` · +${shelves} ENS24`:''}`,
+    role:'Primary unified storage (NVMe)',
+    price: A[pick.pk] + shelves*A.pShelf });
+
+  // ---- networking ----
+  out.items.push({...HW.net, type:'net', qty:2, desc:'25/100GbE leaf pair · redundant fabric', role:'Data fabric', price:A.pNet});
+  out.items.push({...HW.mgmt, type:'net', qty:1, desc:'iDRAC / out-of-band management', role:'Management', price:A.pMgmt});
+
+  // resolve prices for compute/ai items (they used pk keys)
+  out.items.forEach(i=>{ if(i.price===undefined && i.pk) i.price=A[i.pk]; });
+
+  // ---- mechanical totals ----
+  let totU=0, totKW=0, totLbs=0, capex=0;
+  out.items.forEach(i=>{ totU+=i.u*i.qty; totKW+=i.kw*i.qty; totLbs+=i.lbs*i.qty; capex+=(i.price||0)*i.qty; });
+  const racks = Math.max(1, Math.ceil(totU/40));
+  const btu = Math.round(totKW*A.pue*3412);
+  const circuits = Math.ceil(totKW/A.circuitKW);
+
+  /* ---- reality check ---- */
+  const W=out.warnings;
+  if(totKW>5){ W.push({lvl:'crit', t:`<b>${totKW.toFixed(1)} kW</b> draw exceeds a standard wiring-closet circuit (~5 kW). Plan <b>${circuits*2} dedicated 208V/30A feeds</b> (${circuits} + redundant) — loop facilities in before this hits a dock.`}); }
+  else { W.push({lvl:'ok', t:`Power envelope is <b>${totKW.toFixed(1)} kW</b> — fits a redundant pair of standard 208V circuits. No electrical retrofit required.`}); }
+
+  if(inp.ai==='serious'){ W.push({lvl:'crit', t:`The XE9680 runs hot — at <b>${btu.toLocaleString()} BTU/hr</b> total you need a <b>rear-door heat exchanger or hot-aisle containment</b>. A standard CRAC closet will thermal-throttle the GPUs.`}); }
+  else if(inp.ai!=='none' && totKW>4){ W.push({lvl:'warn', t:`GPU nodes raise thermal load to <b>${btu.toLocaleString()} BTU/hr</b>. Confirm cooling headroom or add a supplemental in-row unit.`}); }
+  else { W.push({lvl:'ok', t:`Thermal load <b>${btu.toLocaleString()} BTU/hr</b> sits within a typical conditioned server room. Verify supply temp at the rack face.`}); }
+
+  if(racks>1){ W.push({lvl:'warn', t:`At <b>${totU}U</b> this won't fit one cabinet — plan <b>${racks} racks</b> with cross-rack cabling and a ladder-rack run.`}); }
+  else { W.push({lvl:'ok', t:`Footprint is <b>${totU}U of 42U</b> — single cabinet with ${42-totU}U headroom for growth.`}); }
+
+  if(totLbs>1500){ W.push({lvl:'warn', t:`Loaded weight ≈ <b>${Math.round(totLbs).toLocaleString()} lbs</b>. Check floor loading / raised-floor tile rating before delivery${inp.ai==='serious'?' — the XE9680 alone is ~238 lbs and needs a lift table':''}.`}); }
+
+  if(inp.res==='n1'){ W.push({lvl:'ok', t:`<b>N+1 satisfied:</b> one compute node can fail with zero workload impact. Dual PSUs and dual switches remove single points of failure.`}); }
+  if(inp.res==='dual'){ W.push({lvl:'warn', t:`Two-site replication needs a <b>WAN link of 1–10 Gbps</b> sized to your change rate. Confirm circuit and RPO/RTO before choosing async vs. sync (PowerStore Metro).`}); }
+  if(inp.res==='single'){ W.push({lvl:'warn', t:`Single-site, basic HA only — a node failure degrades capacity. For SIS/EHR/911 workloads, stepping to N+1 is cheap insurance.`}); }
+
+  if(appliances>1){ W.push({lvl:'warn', t:`Capacity exceeds a single appliance (base + 3 enclosures). Modeled as <b>${appliances} clustered appliances</b> — or raise avg drive size in Assumptions to consolidate.`}); }
+  else if(autoUsableTB > usableTB*0.9){ W.push({lvl:'warn', t:`At ${inp.growth}%/yr you'll approach this array's usable capacity by year 4. Size the next enclosure now, or revisit the ${A.drr}:1 reduction assumption.`}); }
+
+  // chosen RAM vs VM density
+  const vmsPerNodeByRam = Math.floor(nodeRamTB*1024/16);                    // ~16GB avg VM
+  const densityTarget = computeNodes>0 ? Math.ceil((inp.vms+inp.vdi)/computeNodes) : 0;
+  if(densityTarget>0 && vmsPerNodeByRam < densityTarget){
+    W.push({lvl:'warn', t:`Each node's <b>${ram.label}</b> supports ~${vmsPerNodeByRam} VMs at 16GB avg — but you're packing ~${densityTarget}/node. Bump RAM or add nodes, or you'll swap to disk.`});
+  } else if(densityTarget>0){
+    W.push({lvl:'ok', t:`<b>${ram.label}/node</b> comfortably holds your ~${densityTarget} VMs/node with memory headroom.`});
+  }
+  // explicit storage target vs workload need
+  if(CONFIG.storeTargetTB>0 && CONFIG.storeTargetTB < autoUsableTB){
+    W.push({lvl:'warn', t:`Your <b>${CONFIG.storeTargetTB}TB</b> target is below the ~${Math.round(autoUsableTB).toLocaleString()}TB the workload projects to need by year 4 at ${inp.growth}% growth. Confirm that's intentional.`});
+  }
+  // licensing nudge
+  if((CONFIG.os==='winstd'||CONFIG.os==='windc') && nodeCores>16){
+    W.push({lvl:'warn', t:`Windows Server is licensed per physical core (16-core base). At ${nodeCores} cores/node you'll need <b>${nodeCores-16} extra core packs per node</b> — factor that into licensing.`});
+  }
+
+  if(inp.vdi>0 && inp.ai==='none'){ W.push({lvl:'warn', t:`${inp.vdi} VDI seats with no GPU — fine for browser/office, but CAD, GIS, or video desktops need GPU acceleration (add an R760xa with L40S).`}); }
+
+  out.metrics={ totU, totKW, totLbs, btu, racks, circuits, capex, iops,
+    cores:computeNodes*nodeCores, ram:+(computeNodes*nodeRamTB).toFixed(1),
+    computeNodes, effectiveTB, usableTB, nodeCores, nodeRamTB, vdi:inp.vdi,
+    fabric:nic.speed, storeTarget:CONFIG.storeTargetTB };
+  return out;
+}
+
+/* ============================ TCO ============================ */
+function tco(rec){
+  const listCap = rec.metrics.capex;                 // sum of LIST prices
+  const netCap = listCap*(1-A.eduDiscount/100);       // after SLED/EDU discount
+  const supportYr = netCap*(A.supportPct/100);
+  const powerYr = rec.metrics.totKW*24*365*A.pue*A.powerRate;
+  const dell = { capex:netCap, support:supportYr*4, power:powerYr*4, risk:0 };
+  dell.total = dell.capex+dell.support+dell.power;
+
+  const sqPowerYr = powerYr*A.sqPowerMult;
+  const sq = { capex:0, support:netCap*(A.sqBreakfixPct/100)*4, power:sqPowerYr*4, risk:netCap*A.sqRefreshFactor };
+  sq.total = sq.support+sq.power+sq.risk;
+  return {dell, sq, powerYr, sqPowerYr, listCap, netCap};
+}
+
+/* ============================ RENDER ============================ */
+const $ = id=>document.getElementById(id);
+const fmt = n => '$'+Math.round(n).toLocaleString();
+const fmtK = n => '$'+(n/1000).toFixed(0)+'k';
+
+function readInputs(){
+  return { vms:+$('vms').value||0, users:+$('users').value||0, data:+$('data').value||0,
+    vdi:+$('vdi').value||0, growth:+$('growth').value||0,
+    ai:$('ai').value, db:$('db').value, res:$('res').value };
+}
+
+function renderRack(rec){
+  const rack=$('rack'); rack.innerHTML='';
+  const order=['net','compute','ai','store']; let units=[];
+  rec.items.slice().sort((a,b)=>order.indexOf(a.type)-order.indexOf(b.type)).forEach(i=>{
+    for(let q=0;q<i.qty;q++){
+      units.push({type:i.type, u:i.u, label:i.model.replace('PowerEdge ','').replace('PowerStore ','PS ').replace('PowerSwitch ','').split(' ')[0]});
+    }
+  });
+  let usedU = units.reduce((s,u)=>s+u.u,0);
+  units.forEach(u=>{ const el=document.createElement('div'); el.className='ru '+u.type;
+    el.style.height=(u.u*12)+'px'; el.textContent=u.label; el.title=u.label+' · '+u.u+'U'; rack.appendChild(el); });
+  let free=Math.max(0,42-usedU);
+  if(free>0){ const e=document.createElement('div'); e.className='ru empty'; e.style.height=(Math.min(free,12)*12)+'px'; e.textContent=free+'U free'; rack.appendChild(e); }
+  $('rackCap').textContent = `${usedU}U used · ${rec.metrics.racks} rack${rec.metrics.racks>1?'s':''}`;
+}
+
+function renderStack(rec){
+  const list=$('stackList'); list.innerHTML='';
+  rec.items.forEach(i=>{ const div=document.createElement('div'); div.className='stack-item';
+    div.innerHTML=`<div class="sw ${i.type}"></div><div class="meta">
+      <div class="sn">${i.model} <span class="qty">×${i.qty}</span></div>
+      <div class="sd">${i.role}</div>
+      <div class="specs"><span>${i.desc}</span></div>
+      <div class="specs"><span><b>${i.u}U</b></span><span><b>${i.kw}kW</b></span></div></div>`;
+    list.appendChild(div); });
+  $('srcNote').textContent = 'Specs verified vs Dell datasheets (Jun 2026): U-height / power / weight are real. Pricing is LIST $ — servers & GPUs anchored to Dell.com, PowerStore & XE9680 are quote-only estimates. Set your SLED/EDU discount in Assumptions.';
+}
+
+function gauge(val,label,color,pct){
+  return `<div class="gauge"><div class="gv" style="color:${color}">${val}</div><div class="gl">${label}</div>
+    <div class="gbar"><i style="width:${Math.min(100,pct)}%;background:${color}"></i></div></div>`;
+}
+function renderReality(rec){
+  const m=rec.metrics;
+  $('gauges').innerHTML =
+    gauge(m.totKW.toFixed(1)+' kW','Power draw', m.totKW>5?'#ff6b6b':'#46c99b', m.totKW/12*100)+
+    gauge((m.btu/1000).toFixed(0)+'k','BTU/hr cooling', m.btu>40000?'#ffb454':'#54c7f0', m.btu/60000*100)+
+    gauge(m.totU+'U','Rack height', m.totU>40?'#ffb454':'#2a93e8', m.totU/42*100)+
+    gauge(m.racks,'Cabinets', m.racks>1?'#ffb454':'#46c99b', m.racks*40);
+  const C=$('checks'); C.innerHTML=''; const icon={ok:'✓',warn:'!',crit:'✕'};
+  rec.warnings.forEach(w=>{ const d=document.createElement('div'); d.className='check '+w.lvl;
+    d.innerHTML=`<div class="ic">${icon[w.lvl]}</div><div class="ct">${w.t}</div>`; C.appendChild(d); });
+}
+
+function renderPerf(rec){
+  const m=rec.metrics;
+  const cards=[
+    {v:m.cores.toLocaleString(), l:'usable CPU cores', n:`across ${m.computeNodes} compute nodes`},
+    {v:m.ram+' TB', l:'pooled memory', n:'DDR5, fault-tolerant'},
+    {v:(m.iops/1000).toFixed(0)+'k', l:'storage IOPS', n:'sub-millisecond NVMe latency'},
+    {v: m.vdi>0 ? m.vdi.toLocaleString()+' seats' : Math.round(m.usableTB).toLocaleString()+' TB',
+     l: m.vdi>0?'VDI density':'usable capacity',
+     n: m.vdi>0?'boots in seconds, not minutes':`~${Math.round(m.effectiveTB).toLocaleString()}TB effective at ${A.drr}:1${m.storeTarget>0?' · your target':''}`},
+  ];
+  $('perfGrid').innerHTML = cards.map(c=>`<div class="perf"><div class="pv">${c.v}</div><div class="pl">${c.l}</div><div class="pn">${c.n}</div></div>`).join('');
+}
+
+function renderCompare(rec,inp){
+  const t=tco(rec);
+  $('compare').innerHTML=`
+  <div class="col legacy">
+    <div class="col-head"><div class="tag">Keep what you have</div><div class="ct2">Status quo / aging on-prem</div></div>
+    <div class="col-body">
+      <div class="crow"><span class="k">Power efficiency</span><span class="v bad">~${A.sqPowerMult}× higher</span></div>
+      <div class="crow"><span class="k">Annual power &amp; cooling</span><span class="v bad">${fmt(t.sqPowerYr)}</span></div>
+      <div class="crow"><span class="k">Redundancy</span><span class="v bad">aging / unknown</span></div>
+      <div class="crow"><span class="k">AI / GPU readiness</span><span class="v bad">none</span></div>
+      <div class="crow"><span class="k">Warranty posture</span><span class="v bad">out of support</span></div>
+      <div class="crow"><span class="k">Year-3 emergency refresh</span><span class="v bad">likely</span></div>
+    </div>
+  </div>
+  <div class="col dell">
+    <div class="col-head"><div class="tag">Recommended</div><div class="ct2">Dell PowerEdge + PowerStore</div></div>
+    <div class="col-body">
+      <div class="crow"><span class="k">Power efficiency</span><span class="v good">baseline (best-in-class)</span></div>
+      <div class="crow"><span class="k">Annual power &amp; cooling</span><span class="v good">${fmt(t.powerYr)}</span></div>
+      <div class="crow"><span class="k">Redundancy</span><span class="v good">${inp.res==='dual'?'two-site replicated':inp.res==='n1'?'N+1, no SPOF':'basic HA'}</span></div>
+      <div class="crow"><span class="k">AI / GPU readiness</span><span class="v good">${inp.ai==='none'?'expansion-ready':'built in'}</span></div>
+      <div class="crow"><span class="k">Warranty posture</span><span class="v good">ProSupport Plus, 4-yr</span></div>
+      <div class="crow"><span class="k">Year-3 emergency refresh</span><span class="v good">not needed</span></div>
+    </div>
+  </div>`;
+}
+
+function renderTCO(rec){
+  const t=tco(rec);
+  const max=Math.max(t.sq.total,t.dell.total)||1;
+  const W=380,H=240,bw=88,gap=120,x0=70,base=H-34;
+  const scale=v=>(v/max)*(base-20);
+  function bars(x,obj,label){
+    let y=base, segs=[[obj.capex,'#2a93e8'],[obj.support,'#46c99b'],[obj.power,'#f2a53c'],[obj.risk,'#ff6b6b']], out='';
+    segs.forEach(([v,c])=>{ if(v<=0)return; const h=scale(v); y-=h; out+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${c}" rx="2"/>`; });
+    out+=`<text x="${x+bw/2}" y="${base+16}" fill="#8499b6" font-size="11" font-family="IBM Plex Mono" text-anchor="middle">${label}</text>`;
+    out+=`<text x="${x+bw/2}" y="${y-8}" fill="#dce6f2" font-size="12.5" font-family="Chakra Petch" font-weight="700" text-anchor="middle">${fmtK(obj.total)}</text>`;
+    return out;
+  }
+  $('tcoSvg').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="4-year TCO comparison">
+    <line x1="${x0-10}" y1="${base}" x2="${W-10}" y2="${base}" stroke="#1c2c42"/>
+    ${bars(x0,t.sq,'Status quo')}${bars(x0+bw+gap,t.dell,'Dell proposed')}</svg>`;
+
+  const save=t.sq.total-t.dell.total, pct=Math.round(save/t.sq.total*100);
+  $('tcoStats').innerHTML=`
+    <div class="bigstat"><div class="bl">4-yr Dell TCO</div><div class="bv">${fmt(t.dell.total)}</div>
+      <div class="bn">${fmt(t.netCap)} hardware (net) + ${fmt(t.dell.support)} support + ${fmt(t.dell.power)} power</div></div>
+    <div class="bigstat"><div class="bl">4-yr advantage vs. status quo</div><div class="bv save">${save>0?fmt(save):'—'}</div>
+      <div class="bn">${pct>0?`~${pct}% lower lifetime cost — efficiency + avoided emergency refresh`:'comparable; the win is capability & risk'}</div></div>
+    <div class="bigstat"><div class="bl">Annual energy saved</div><div class="bv">${fmt(t.sqPowerYr-t.powerYr)}</div>
+      <div class="bn">newer silicon + right-sized cooling at $${A.powerRate}/kWh, PUE ${A.pue}</div></div>`;
+
+  $('assumpFoot').innerHTML=`ASSUMPTIONS (all editable above) — List hardware ${fmt(t.listCap)} → ${A.eduDiscount}% SLED/EDU discount → ${fmt(t.netCap)} net. Power $${A.powerRate}/kWh · PUE ${A.pue} · ProSupport ${A.supportPct}%/yr · ${A.drr}:1 data reduction.
+  Status quo modeled as ${A.sqPowerMult}× power, ${A.sqBreakfixPct}%/yr break-fix, yr-3 refresh at ${A.sqRefreshFactor}× capex.
+  List $ anchored to Dell.com where published (e.g. L40S ~$17.1k, H100 ~$58.3k); PowerStore & XE9680 are quote-only street estimates — confirm with your rep.`;
+}
+
+/* quote builder */
+function buildQuote(rec,inp){
+  const m=rec.metrics, t=tco(rec), L=[];
+  L.push('PRELIMINARY QUOTE REQUEST — Workload Architect AI');
+  L.push('='.repeat(56),'');
+  L.push('WORKLOAD PROFILE');
+  L.push(`  VMs ............. ${inp.vms}      Concurrent users . ${inp.users}`);
+  L.push(`  Current data ... ${inp.data} TB   Growth ........... ${inp.growth}%/yr`);
+  L.push(`  VDI seats ...... ${inp.vdi}       AI/ML ............ ${inp.ai}`);
+  L.push(`  Database ....... ${inp.db}   Resilience ....... ${inp.res}`,'');
+  const cpu=find(CPUS,CONFIG.cpu), ram=RAMS.find(r=>r.gb===+CONFIG.ram)||RAMS[1],
+        os=find(OSES,CONFIG.os), nic=find(NICS,CONFIG.nic), local=find(LOCALS,CONFIG.local);
+  L.push('COMPUTE NODE BUILD (each node)');
+  L.push(`  CPU ............ ${cpu.label}`);
+  L.push(`  Memory ......... ${ram.label}`);
+  L.push(`  OS ............. ${os.label}`);
+  L.push(`  Networking ..... ${nic.label}`);
+  L.push(`  Local storage .. ${local.label}`,'');
+  L.push('PROPOSED BILL OF MATERIALS (planning grade)');
+  rec.items.forEach(i=>L.push(`  ${('x'+i.qty).padEnd(4)} ${i.model.padEnd(26)} — ${i.role}`));
+  L.push('');
+  L.push('MECHANICAL ENVELOPE');
+  L.push(`  Rack ........... ${m.totU}U / ${m.racks} cabinet(s)`);
+  L.push(`  Power .......... ${m.totKW.toFixed(1)} kW · ${m.circuits} circuit(s) + redundancy`);
+  L.push(`  Cooling ........ ${m.btu.toLocaleString()} BTU/hr`);
+  L.push(`  Weight ......... ~${Math.round(m.totLbs).toLocaleString()} lbs`);
+  L.push(`  Storage ........ ~${Math.round(m.usableTB).toLocaleString()} TB usable / ~${Math.round(m.effectiveTB).toLocaleString()} TB effective @ ${A.drr}:1`,'');
+  L.push('BUDGETARY PRICING (list $, pre-discount)');
+  L.push(`  Hardware list .. ${fmt(t.listCap)}`);
+  L.push(`  SLED/EDU disc .. ${A.eduDiscount}%  ->  net ${fmt(t.netCap)}`,'');
+  L.push('BUDGETARY 4-YEAR TCO (net)');
+  L.push(`  Dell proposed .. ${fmt(t.dell.total)}`);
+  L.push(`  vs. status quo . ${fmt(t.sq.total)}  (advantage ${fmt(t.sq.total-t.dell.total)})`,'');
+  L.push('NOTE: Directional figures for discovery. Confirm config, site survey,');
+  L.push('and SLED/EDU pricing with the Dell account team.');
+  return L.join('\n');
+}
+
+/* ============================ ASSUMPTIONS PANEL ============================ */
+function renderAssumptions(){
+  const body=$('abody');
+  body.innerHTML = ASSUMP_GROUPS.map(g=>`
+    <div class="agroup"><div class="ah">${g.title}</div><div class="agrid">
+      ${g.fields.map(f=>`<div class="afield"><label>${f.l}</label>
+        <input type="number" data-k="${f.k}" step="${f.s}" value="${A[f.k]}"></div>`).join('')}
+    </div></div>`).join('') + `<button class="areset" id="resetA">Reset to defaults</button>`;
+  body.querySelectorAll('input[data-k]').forEach(inp=>inp.addEventListener('input',()=>{
+    const v=parseFloat(inp.value); if(!isNaN(v)) A[inp.dataset.k]=v; run();
+  }));
+  $('resetA').addEventListener('click',()=>{ A={...DEFAULTS}; renderAssumptions(); run(); });
+}
+
+/* ============================ BUILD CONFIGURATOR ============================ */
+function renderConfig(){
+  const fill=(el,arr,cur)=>{ $(el).innerHTML=arr.map(o=>{const v=o.id!==undefined?o.id:o.gb; return `<option value="${v}" ${v==cur?'selected':''}>${o.label}</option>`;}).join(''); };
+  fill('cfgCpu',CPUS,CONFIG.cpu); fill('cfgRam',RAMS,CONFIG.ram); fill('cfgOs',OSES,CONFIG.os);
+  fill('cfgNic',NICS,CONFIG.nic); fill('cfgLocal',LOCALS,CONFIG.local); $('cfgStore').value=CONFIG.storeTargetTB;
+  $('cfgCpu').onchange=e=>{CONFIG.cpu=e.target.value; afterCfg();};
+  $('cfgRam').onchange=e=>{CONFIG.ram=+e.target.value; afterCfg();};
+  $('cfgOs').onchange=e=>{CONFIG.os=e.target.value; afterCfg();};
+  $('cfgNic').onchange=e=>{CONFIG.nic=e.target.value; afterCfg();};
+  $('cfgLocal').onchange=e=>{CONFIG.local=e.target.value; afterCfg();};
+  $('cfgStore').oninput=e=>{CONFIG.storeTargetTB=Math.max(0,+e.target.value||0); afterCfg();};
+  updateCfgSummary();
+}
+function afterCfg(){ updateCfgSummary(); run(); }
+function updateCfgSummary(){
+  const cpu=find(CPUS,CONFIG.cpu), ram=RAMS.find(r=>r.gb===+CONFIG.ram)||RAMS[1],
+        os=find(OSES,CONFIG.os), nic=find(NICS,CONFIG.nic), local=find(LOCALS,CONFIG.local);
+  const nodePrice=A.pR760 + cpu.priceEach*2 + ram.price + os.price + nic.price + local.price;
+  $('cfgSummary').innerHTML=`<span>Per node: <b>${cpu.coresEach*2} cores</b> · <b>${ram.label}</b> · <b>${nic.speed}</b>${local.tb?` · <b>${local.tb}TB local</b>`:''}</span>
+    <span>List <span class="price">${fmt(nodePrice)}</span>/node <span style="color:var(--faint)">(base ${fmt(A.pR760)} + CPU/RAM/OS/NIC/disk)</span></span>`;
+}
+
+/* ============================ WIRE-UP ============================ */
+let lastRec=null;
+function run(){
+  const inp=readInputs(); const rec=recommend(inp); lastRec=rec;
+  renderRack(rec); renderStack(rec); renderReality(rec); renderPerf(rec);
+  renderCompare(rec,inp); renderTCO(rec);
+}
+
+function renderTpls(active){
+  $('tpls').innerHTML = TEMPLATES.map(t=>
+    `<button class="tpl${active===t.id?' active':''}" data-id="${t.id}"><span class="tn">${t.name}</span><span class="td">${t.desc}</span></button>`).join('');
+  document.querySelectorAll('.tpl').forEach(b=>b.addEventListener('click',()=>{
+    const t=TEMPLATES.find(x=>x.id===b.dataset.id);
+    $('vms').value=t.v.vms; $('users').value=t.v.users; $('data').value=t.v.data;
+    $('vdi').value=t.v.vdi; $('growth').value=t.v.growth; $('growthVal').textContent=t.v.growth+'%';
+    $('ai').value=t.v.ai; $('db').value=t.v.db; $('res').value=t.v.res;
+    renderTpls(t.id); run(); $('outPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }));
+}
+
+['vms','users','data','vdi','ai','db','res'].forEach(id=>$(id).addEventListener('input',()=>{renderTpls(null);run();}));
+$('growth').addEventListener('input',e=>{$('growthVal').textContent=e.target.value+'%'; renderTpls(null); run();});
+$('buildBtn').addEventListener('click',()=>{run(); $('realitySec').scrollIntoView({behavior:'smooth'});});
+
+function openModal(title,body){ $('modalTitle').textContent=title; $('quoteText').textContent=body; $('modalBg').classList.add('show'); }
+function closeModal(){ $('modalBg').classList.remove('show'); }
+$('quoteBtn').addEventListener('click',()=>{ if(!lastRec)run(); openModal('Preliminary quote request', buildQuote(lastRec,readInputs())); });
+$('refineBtn').addEventListener('click',()=>{ if(!lastRec)run();
+  const body='SEND TO YOUR DELL REP\n'+'='.repeat(56)+'\n\nSubject: Refine my Workload Architect design\n\n'+
+    'Hi [rep] — I roughed out an architecture with Workload Architect AI and\n'+
+    'would like to refine it together. Full BOM and reality check below.\n\n'+buildQuote(lastRec,readInputs());
+  openModal('Refine with my Dell rep', body); });
+$('modalX').addEventListener('click',closeModal);
+$('closeBtn').addEventListener('click',closeModal);
+$('modalBg').addEventListener('click',e=>{if(e.target===$('modalBg'))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+$('copyBtn').addEventListener('click',()=>{ const txt=$('quoteText').textContent;
+  navigator.clipboard?.writeText(txt).then(()=>{$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy to clipboard',1600);})
+    .catch(()=>{const r=document.createRange();r.selectNode($('quoteText'));window.getSelection().removeAllRanges();window.getSelection().addRange(r);}); });
+
+// init
+renderTpls('k12'); renderAssumptions(); renderConfig(); run();
+</script>
+</body>
+</html>
