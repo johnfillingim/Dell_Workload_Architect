@@ -299,14 +299,14 @@
         <div class="tpls" id="tpls"></div>
 
         <div class="row2">
-          <div class="field"><label>General-purpose VMs <span class="unit">count</span></label><input type="number" id="vms" min="0" value="120"></div>
-          <div class="field"><label>Concurrent users <span class="unit">peak</span></label><input type="number" id="users" min="0" value="1200"></div>
+          <div class="field"><label>General-purpose VMs <span class="unit">count</span></label><input type="number" id="vms" min="0" value="90"></div>
+          <div class="field"><label>Concurrent users <span class="unit">peak</span></label><input type="number" id="users" min="0" value="750"></div>
         </div>
         <div class="row2">
-          <div class="field"><label>Current data <span class="unit">TB logical</span></label><input type="number" id="data" min="0" value="60"></div>
+          <div class="field"><label>Current data <span class="unit">TB logical</span></label><input type="number" id="data" min="0" value="50"></div>
           <div class="field"><label>VDI / virtual desktops <span class="unit">seats</span></label><input type="number" id="vdi" min="0" value="0"></div>
         </div>
-        <div class="field"><label>Annual data growth <span class="rangeval" id="growthVal">25%</span></label><input type="range" id="growth" min="5" max="60" step="5" value="25"></div>
+        <div class="field"><label>Annual data growth <span class="rangeval" id="growthVal">20%</span></label><input type="range" id="growth" min="5" max="60" step="5" value="20"></div>
         <div class="row2">
           <div class="field"><label>AI / ML ambition</label>
             <select id="ai"><option value="none">None yet</option><option value="inference">Inference / pilot</option><option value="training">Model training</option><option value="serious">Serious GenAI / HPC</option></select></div>
@@ -1013,6 +1013,10 @@ function run(){
   renderCompare(rec,inp); renderTCO(rec);
 }
 
+/* neutral landing profile — representative of a medium-size public-sector entity
+   (mid-size district / city-county agency / clinic). Not tied to one vertical, so no
+   scenario chip is pre-selected; the rep picks a scenario to specialize from here. */
+const DEFAULT_PROFILE = { vms:90, users:750, data:50, vdi:0, growth:20, ai:'none', db:'standard', res:'n1' };
 function applyTemplate(t){
   $('vms').value=t.v.vms; $('users').value=t.v.users; $('data').value=t.v.data;
   $('vdi').value=t.v.vdi; $('growth').value=t.v.growth; $('growthVal').textContent=t.v.growth+'%';
@@ -1032,7 +1036,7 @@ function renderTpls(active){
 ['vms','users','data','vdi'].forEach(id=>$(id).addEventListener('change',()=>{clampField(id);run();}));
 $('growth').addEventListener('input',e=>{$('growthVal').textContent=e.target.value+'%'; renderTpls(null); run();});
 $('buildBtn').addEventListener('click',()=>{run(); $('realitySec').scrollIntoView({behavior:'smooth'});});
-$('resetInputs').addEventListener('click',()=>{ applyTemplate(TEMPLATES[0]); renderTpls('k12'); run(); $('inputPanel').scrollIntoView({behavior:'smooth',block:'nearest'}); });
+$('resetInputs').addEventListener('click',()=>{ applyTemplate({v:DEFAULT_PROFILE}); renderTpls(null); run(); $('inputPanel').scrollIntoView({behavior:'smooth',block:'nearest'}); });
 $('repEmail').value = REP;
 $('repEmail').addEventListener('input',e=>{ REP=e.target.value.trim(); saveRep(REP); refreshRepLabel(); });
 
@@ -1082,11 +1086,12 @@ $('copyBtn').addEventListener('click',()=>{ const txt=$('quoteText').textContent
   navigator.clipboard?.writeText(txt).then(()=>{$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy to clipboard',1600);})
     .catch(()=>{const r=document.createRange();r.selectNode($('quoteText'));window.getSelection().removeAllRanges();window.getSelection().addRange(r);}); });
 
-// init — a shared link (#s=...) restores the exact design; otherwise default to K-12
+// init — a shared link (#s=...) restores the exact design; otherwise load the neutral
+// medium-public default profile with no vertical scenario pre-selected
 const restored = loadFromURL();
-if(!restored) applyTemplate(TEMPLATES[0]);            // keep the K-12 highlight in sync with the inputs
+if(!restored) applyTemplate({v:DEFAULT_PROFILE});
 refreshRepLabel();
-renderTpls(restored ? null : 'k12'); renderAssumptions(); renderConfig(); run();
+renderTpls(null); renderAssumptions(); renderConfig(); run();
 </script>
 </body>
 </html>
