@@ -397,6 +397,10 @@
         <label for="repEmail" style="display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Your Dell rep email — saved on this device, baked into share links so customers reach you</label>
         <input type="email" id="repEmail" placeholder="you@dell.com" autocomplete="email" style="width:100%;max-width:340px;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none">
       </div>
+      <div class="rep-field" style="flex-basis:100%;margin-top:10px">
+        <label for="pubUrl" style="display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Published app URL — where this tool is hosted; share links are built from it (leave blank to use the default)</label>
+        <input type="url" id="pubUrl" autocomplete="off" style="width:100%;max-width:420px;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none">
+      </div>
     </div>
   </section>
 </main>
@@ -910,10 +914,21 @@ function decodeState(s){
   try{ return JSON.parse(decodeURIComponent(escape(atob(s)))); }
   catch(e){ return null; }
 }
+/* where the hosted app lives — share links are built against this, not the local file
+   path. Order of preference: rep's saved override > the current http(s) address >
+   the canonical default below (so links made from a file:// copy still point home). */
+const DEFAULT_PUB_URL = 'https://johnfillingim.github.io/Dell_Workload_Architect/';
+function loadPub(){ try{ return (localStorage.getItem('wa_puburl')||'').trim(); }catch(e){ return ''; } }
+function savePub(v){ try{ localStorage.setItem('wa_puburl',v); }catch(e){} }
+let PUB = loadPub();
+function publishedBase(){
+  let b = PUB;
+  if(!b) b = /^https?:/i.test(location.href) ? location.href : DEFAULT_PUB_URL;
+  return b.split('#')[0].split('?')[0];
+}
 function shareURL(){
-  const base=location.href.split('#')[0].split('?')[0];
   const q = REP ? ('?rep='+encodeURIComponent(REP)) : '';
-  return base + q + '#s=' + encodeState(collectState());
+  return publishedBase() + q + '#s=' + encodeState(collectState());
 }
 function applyState(st){
   if(!st) return;
@@ -972,6 +987,9 @@ $('buildBtn').addEventListener('click',()=>{run(); $('realitySec').scrollIntoVie
 $('resetInputs').addEventListener('click',()=>{ applyTemplate(TEMPLATES[0]); renderTpls('k12'); run(); $('inputPanel').scrollIntoView({behavior:'smooth',block:'nearest'}); });
 $('repEmail').value = REP;
 $('repEmail').addEventListener('input',e=>{ REP=e.target.value.trim(); saveRep(REP); refreshRepLabel(); });
+$('pubUrl').value = PUB;
+$('pubUrl').placeholder = DEFAULT_PUB_URL;
+$('pubUrl').addEventListener('input',e=>{ PUB=e.target.value.trim(); savePub(PUB); });
 
 let lastFocus=null;
 function modalButtons(){ return [...$('modalBg').querySelectorAll('button')].filter(b=>b.offsetParent!==null); }
