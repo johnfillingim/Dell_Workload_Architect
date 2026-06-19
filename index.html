@@ -117,6 +117,15 @@
   .cfg-summary{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px;display:flex;gap:22px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted)}
   .cfg-summary b{color:var(--cyan);font-weight:500}
   .cfg-summary .price{color:var(--amber)}
+  .cfg-toggles{margin-top:16px;display:flex;gap:12px;flex-wrap:wrap}
+  .tog{display:flex;align-items:center;gap:9px;cursor:pointer;border:1px solid var(--line-2);border-radius:9px;padding:10px 13px;font-size:12.5px;font-weight:600;color:var(--text);background:var(--ink-3);transition:.15s;user-select:none}
+  .tog:hover{border-color:var(--cyan)}
+  .tog input{appearance:none;width:34px;height:19px;border-radius:100px;background:var(--line-2);position:relative;cursor:pointer;flex:none;transition:.15s}
+  .tog input:checked{background:var(--green)}
+  .tog input::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.15s}
+  .tog input:checked::after{transform:translateX(15px)}
+  .tog.off{color:var(--muted)}
+  .tog .sub{font-family:var(--mono);font-size:10px;color:var(--faint);font-weight:400;letter-spacing:.3px}
 
   /* assumptions */
   details.assump-panel{margin-bottom:30px;border:1px solid var(--line);border-radius:14px;background:var(--ink-2);overflow:hidden}
@@ -337,6 +346,10 @@
         <div class="cfg-field"><label>Local storage (per node)</label><select id="cfgLocal"></select></div>
         <div class="cfg-field"><label>Storage appliance target <span class="cfg-unit">usable TB · 0 = auto</span></label><input type="number" id="cfgStore" min="0" value="0"></div>
       </div>
+      <div class="cfg-toggles" id="cfgToggles">
+        <label class="tog" id="togStorageLbl"><input type="checkbox" id="cfgInclStorage" checked><span>Primary storage <span class="sub">PowerStore — uncheck if reusing an existing SAN/array</span></span></label>
+        <label class="tog" id="togNetworkLbl"><input type="checkbox" id="cfgInclNetwork" checked><span>Network fabric <span class="sub">PowerSwitch — uncheck if reusing existing leaf/spine</span></span></label>
+      </div>
       <div class="cfg-summary" id="cfgSummary"></div>
     </div>
   </div>
@@ -551,7 +564,7 @@ const LOCALS = [ // per-node local storage (primary data lives on PowerStore)
 const find=(arr,id)=>arr.find(x=>x.id===id)||arr[0];
 
 /* current build selections */
-let CONFIG = { cpu:'g6430', ram:512, os:'none', nic:'25g', local:'boot', storeTargetTB:0 };
+let CONFIG = { cpu:'g6430', ram:512, os:'none', nic:'25g', local:'boot', storeTargetTB:0, inclStorage:true, inclNetwork:true };
 
 /* ============================ ENGINE ============================ */
 function recommend(inp){
@@ -616,20 +629,26 @@ function recommend(inp){
   const usableTB = drivesPer * physPerDrive * appliances;
   const effectiveTB = usableTB * A.drr;
 
-  out.store={tier, model:pick.model, qty:storeQty, shelves, effectiveTB, usableTB, iops, drives:totalDrives};
-  out.items.push({...pick, type:'store', qty:storeQty,
-    u:pick.u + shelves*SHELF.u, kw:pick.kw + shelves*SHELF.kw, lbs:pick.lbs + shelves*SHELF.lbs,
-    desc:`~${Math.round(usableTB).toLocaleString()}TB usable / ~${Math.round(effectiveTB).toLocaleString()}TB effective @ ${A.drr}:1 · ${totalDrives}× ${A.avgDriveTB}TB NVMe${dual?' · async replicated':''}${shelves?` · +${shelves} ENS24`:''}`,
-    role:'Primary unified storage (NVMe)',
-    price: A[pick.pk] + shelves*A.pShelf });
+  const hasStore = CONFIG.inclStorage !== false;
+  out.store = hasStore ? {tier, model:pick.model, qty:storeQty, shelves, effectiveTB, usableTB, iops, drives:totalDrives} : null;
+  if(hasStore){
+    out.items.push({...pick, type:'store', qty:storeQty,
+      u:pick.u + shelves*SHELF.u, kw:pick.kw + shelves*SHELF.kw, lbs:pick.lbs + shelves*SHELF.lbs,
+      desc:`~${Math.round(usableTB).toLocaleString()}TB usable / ~${Math.round(effectiveTB).toLocaleString()}TB effective @ ${A.drr}:1 · ${totalDrives}× ${A.avgDriveTB}TB NVMe${dual?' · async replicated':''}${shelves?` · +${shelves} ENS24`:''}`,
+      role:'Primary unified storage (NVMe)',
+      price: A[pick.pk] + shelves*A.pShelf });
+  }
 
   // ---- networking: scale leaf pairs to port count (48×25G per S5248F), min a redundant pair ----
+  const hasNet = CONFIG.inclNetwork !== false;
   const aiNodes = out.items.filter(i=>i.type==='ai').reduce((s,i)=>s+i.qty,0);
-  const portsNeeded = (computeNodes + aiNodes + storeQty) * 2;             // dual-homed for redundancy
+  const portsNeeded = (computeNodes + aiNodes + (hasStore?storeQty:0)) * 2; // dual-homed for redundancy
   let leaves = Math.max(2, Math.ceil(portsNeeded/48));
   if(leaves%2) leaves++;                                                   // keep leaves in redundant pairs
-  out.items.push({...HW.net, type:'net', qty:leaves, desc:`25/100GbE leaf fabric · ${leaves/2} redundant pair${leaves>2?'s':''}`, role:'Data fabric', price:A.pNet});
-  out.items.push({...HW.mgmt, type:'net', qty:1, desc:'iDRAC / out-of-band management', role:'Management', price:A.pMgmt});
+  if(hasNet){
+    out.items.push({...HW.net, type:'net', qty:leaves, desc:`25/100GbE leaf fabric · ${leaves/2} redundant pair${leaves>2?'s':''}`, role:'Data fabric', price:A.pNet});
+    out.items.push({...HW.mgmt, type:'net', qty:1, desc:'iDRAC / out-of-band management', role:'Management', price:A.pMgmt});
+  }
 
   // resolve prices for compute/ai items (they used pk keys)
   out.items.forEach(i=>{ if(i.price===undefined && i.pk) i.price=A[i.pk]; });
@@ -659,8 +678,11 @@ function recommend(inp){
   if(inp.res==='dual'){ W.push({lvl:'warn', t:`Two-site replication needs a <b>WAN link of 1–10 Gbps</b> sized to your change rate. Confirm circuit and RPO/RTO before choosing async vs. sync (PowerStore Metro).`}); }
   if(inp.res==='single'){ W.push({lvl:'warn', t:`Single-site, basic HA only — a node failure degrades capacity. For SIS/EHR/911 workloads, stepping to N+1 is cheap insurance.`}); }
 
-  if(appliances>1){ W.push({lvl:'warn', t:`Capacity exceeds a single appliance (base + 3 enclosures). Modeled as <b>${appliances} clustered appliances</b> — or raise avg drive size in Assumptions to consolidate.`}); }
+  if(!hasStore){
+    W.push({lvl:'warn', t:`<b>Primary storage excluded</b> — this quote assumes you reuse an existing SAN/array. Confirm it has headroom for ~<b>${Math.round(autoUsableTB).toLocaleString()}TB usable</b> (~${Math.round(autoUsableTB*A.drr).toLocaleString()}TB effective) and ~<b>${(iops/1000).toFixed(0)}k IOPS</b> by year 4, and that the fabric reaches every new node — shared storage is required for HA / live migration.`});
+  } else if(appliances>1){ W.push({lvl:'warn', t:`Capacity exceeds a single appliance (base + 3 enclosures). Modeled as <b>${appliances} clustered appliances</b> — or raise avg drive size in Assumptions to consolidate.`}); }
   else if(autoUsableTB > usableTB*0.9){ W.push({lvl:'warn', t:`At ${inp.growth}%/yr you'll approach this array's usable capacity by year 4. Size the next enclosure now, or revisit the ${A.drr}:1 reduction assumption.`}); }
+  if(!hasNet){ W.push({lvl:'warn', t:`<b>Network fabric excluded</b> — assumes existing leaf/spine. You'll need about <b>${portsNeeded} free ${nic.speed} ports</b> (redundant) for these nodes, plus an out-of-band path for iDRAC. Confirm available switch capacity before quoting.`}); }
 
   // node density — the cluster is already sized to the chosen build, so report what bounds each node
   if(inp.vms>0){
@@ -672,7 +694,7 @@ function recommend(inp){
     W.push({lvl:'ok', t:`Each node hosts ~<b>${vdiPerNode} VDI seats</b> on this build (${A.ramPerVDIGB}GB & ${A.vcpuPerSeat} vCPU per seat) — ${nodesVDI} node${nodesVDI>1?'s':''} for ${inp.vdi} seats.`});
   }
   // explicit storage target vs workload need
-  if(CONFIG.storeTargetTB>0 && CONFIG.storeTargetTB < autoUsableTB){
+  if(hasStore && CONFIG.storeTargetTB>0 && CONFIG.storeTargetTB < autoUsableTB){
     W.push({lvl:'warn', t:`Your <b>${CONFIG.storeTargetTB}TB</b> target is below the ~${Math.round(autoUsableTB).toLocaleString()}TB the workload projects to need by year 4 at ${inp.growth}% growth. Confirm that's intentional.`});
   }
   // licensing nudge
@@ -684,7 +706,8 @@ function recommend(inp){
 
   out.metrics={ totU, totKW, totLbs, btu, racks, circuits, capex, iops,
     cores:computeNodes*nodeCores, ram:+(computeNodes*nodeRamTB).toFixed(1),
-    computeNodes, effectiveTB, usableTB, nodeCores, nodeRamTB, vdi:inp.vdi,
+    computeNodes, effectiveTB:hasStore?effectiveTB:0, usableTB:hasStore?usableTB:0,
+    hasStore, hasNet, nodeCores, nodeRamTB, vdi:inp.vdi,
     fabric:nic.speed, storeTarget:CONFIG.storeTargetTB };
   return out;
 }
@@ -765,13 +788,16 @@ function renderReality(rec){
 
 function renderPerf(rec){
   const m=rec.metrics;
+  const capCard = m.vdi>0
+    ? {v:m.vdi.toLocaleString()+' seats', l:'VDI density', n:'boots in seconds, not minutes'}
+    : m.hasStore
+      ? {v:Math.round(m.usableTB).toLocaleString()+' TB', l:'usable capacity', n:`~${Math.round(m.effectiveTB).toLocaleString()}TB effective at ${A.drr}:1${m.storeTarget>0?' · your target':''}`}
+      : {v:'BYO', l:'storage', n:'reusing existing SAN / array'};
   const cards=[
     {v:m.cores.toLocaleString(), l:'usable CPU cores', n:`across ${m.computeNodes} compute nodes`},
     {v:m.ram+' TB', l:'pooled memory', n:'DDR5, fault-tolerant'},
-    {v:(m.iops/1000).toFixed(0)+'k', l:'storage IOPS', n:'sub-millisecond NVMe latency'},
-    {v: m.vdi>0 ? m.vdi.toLocaleString()+' seats' : Math.round(m.usableTB).toLocaleString()+' TB',
-     l: m.vdi>0?'VDI density':'usable capacity',
-     n: m.vdi>0?'boots in seconds, not minutes':`~${Math.round(m.effectiveTB).toLocaleString()}TB effective at ${A.drr}:1${m.storeTarget>0?' · your target':''}`},
+    {v:(m.iops/1000).toFixed(0)+'k', l:m.hasStore?'storage IOPS':'IOPS demand', n:m.hasStore?'sub-millisecond NVMe latency':'must be served by existing array'},
+    capCard,
   ];
   $('perfGrid').innerHTML = cards.map(c=>`<div class="perf"><div class="pv">${c.v}</div><div class="pl">${c.l}</div><div class="pn">${c.n}</div></div>`).join('');
 }
@@ -863,7 +889,9 @@ function buildQuote(rec,inp){
   L.push(`  Power .......... ${m.totKW.toFixed(1)} kW · ${m.circuits} circuit(s) + redundancy`);
   L.push(`  Cooling ........ ${m.btu.toLocaleString()} BTU/hr`);
   L.push(`  Weight ......... ~${Math.round(m.totLbs).toLocaleString()} lbs`);
-  L.push(`  Storage ........ ~${Math.round(m.usableTB).toLocaleString()} TB usable / ~${Math.round(m.effectiveTB).toLocaleString()} TB effective @ ${A.drr}:1`,'');
+  L.push(`  Storage ........ ${m.hasStore?`~${Math.round(m.usableTB).toLocaleString()} TB usable / ~${Math.round(m.effectiveTB).toLocaleString()} TB effective @ ${A.drr}:1`:'excluded — reuse existing SAN/array'}`);
+  if(!m.hasNet) L.push(`  Network ........ excluded — reuse existing leaf/spine`);
+  L.push('');
   L.push('BUDGETARY PRICING (list $, pre-discount)');
   L.push(`  Hardware list .. ${fmt(t.listCap)}`);
   L.push(`  SLED/EDU disc .. ${A.eduDiscount}%  ->  net ${fmt(t.netCap)}`,'');
@@ -900,6 +928,17 @@ function renderConfig(){
   $('cfgNic').onchange=e=>{CONFIG.nic=e.target.value; afterCfg();};
   $('cfgLocal').onchange=e=>{CONFIG.local=e.target.value; afterCfg();};
   $('cfgStore').oninput=e=>{CONFIG.storeTargetTB=Math.max(0,+e.target.value||0); afterCfg();};
+  const syncTog=()=>{
+    $('cfgInclStorage').checked=CONFIG.inclStorage!==false;
+    $('cfgInclNetwork').checked=CONFIG.inclNetwork!==false;
+    $('togStorageLbl').classList.toggle('off', CONFIG.inclStorage===false);
+    $('togNetworkLbl').classList.toggle('off', CONFIG.inclNetwork===false);
+    $('cfgStore').disabled = CONFIG.inclStorage===false;            // capacity target is moot without an array
+    $('cfgStore').style.opacity = CONFIG.inclStorage===false?0.4:1;
+  };
+  $('cfgInclStorage').onchange=e=>{CONFIG.inclStorage=e.target.checked; syncTog(); afterCfg();};
+  $('cfgInclNetwork').onchange=e=>{CONFIG.inclNetwork=e.target.checked; syncTog(); afterCfg();};
+  syncTog();
   updateCfgSummary();
 }
 function afterCfg(){ updateCfgSummary(); run(); }
