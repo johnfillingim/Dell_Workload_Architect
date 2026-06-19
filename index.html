@@ -159,6 +159,9 @@
   .crow .k{color:var(--muted)}
   .crow .v{font-family:var(--mono);font-size:13px;text-align:right}
   .crow .v.good{color:var(--green)} .crow .v.bad{color:var(--red)}
+  .compare-note{margin-top:14px;border:1px solid var(--line);border-left:2px solid var(--amber);border-radius:8px;background:rgba(242,165,60,.05);padding:11px 14px;font-family:var(--mono);font-size:10.5px;line-height:1.65;color:var(--muted)}
+  .compare-note b{color:var(--amber);font-weight:500}
+  .compare-note a{color:var(--cyan);cursor:pointer}
 
   .gauges{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
   @media(max-width:520px){.gauges{grid-template-columns:repeat(2,1fr)}}
@@ -226,6 +229,30 @@
 
   :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+  /* print / PDF one-pager — keeps the brand-dark look; hides interactive chrome */
+  @media print{
+    @page{ size:A4 portrait; margin:10mm; }
+    *{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    html{ scroll-behavior:auto }
+    body{ background:var(--ink)!important; background-image:none!important; font-size:11px }
+    header.topbar{ position:static!important; box-shadow:none }
+    .reality-badge, .scan, .panel-head .hint, .auto-note,
+    #inputPanel, #buildPanel, #assumpPanel, .cta-actions, .modal-bg,
+    .build-btn, .tpls, .tpl-label, .hero p.lede{ display:none!important }
+    .console{ grid-template-columns:1fr!important }
+    .hero{ padding:10px 0 4px }
+    .hero h2{ font-size:22px }
+    #outPanel, .cta-band, footer{ break-inside:avoid }
+    .section{ padding:16px 0 }
+    .sec-head{ break-after:avoid }                      /* keep heading with its content */
+    .gauge, .check, .perf, .col, .tco-chart, .bigstat{ break-inside:avoid }
+    .tco-grid{ grid-template-columns:1fr!important }    /* stack chart over stats for print */
+    .tco-chart{ max-width:430px }                       /* keep the SVG from ballooning full-width */
+    #tcoSvg svg{ max-height:220px; display:block }
+    .cta-band{ background:none!important; border-color:var(--line) }
+    .cta-band h4{ font-size:17px }
+  }
 </style>
 </head>
 <body>
@@ -281,6 +308,7 @@
           <select id="res"><option value="single">Single site, basic HA</option><option value="n1" selected>Single site, N+1 redundancy</option><option value="dual">Two sites, replicated</option></select></div>
 
         <button class="build-btn" id="buildBtn">Build my architecture →</button>
+        <button class="areset" id="resetInputs" style="width:100%;margin-top:10px">Reset to default scenario</button>
         <div class="auto-note">Anonymized inputs only — no PII leaves this page</div>
       </div>
     </div>
@@ -333,6 +361,7 @@
   <section class="section">
     <div class="sec-head"><span class="num">03</span><h3>Status quo vs. Dell proposed</h3><span class="ln"></span></div>
     <div class="compare" id="compare"></div>
+    <div class="compare-note" id="compareNote"></div>
   </section>
 
   <section class="section">
@@ -360,7 +389,13 @@
       </div>
       <div class="cta-actions">
         <button class="btn primary" id="quoteBtn">Generate quote request</button>
+        <button class="btn ghost" id="shareBtn">Copy share link</button>
+        <button class="btn ghost" id="pdfBtn">Export PDF</button>
         <button class="btn ghost" id="refineBtn">Refine with my Dell rep</button>
+      </div>
+      <div class="rep-field" style="flex-basis:100%;margin-top:6px">
+        <label for="repEmail" style="display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Your Dell rep email — saved on this device, baked into share links so customers reach you</label>
+        <input type="email" id="repEmail" placeholder="you@dell.com" autocomplete="email" style="width:100%;max-width:340px;background:var(--ink);border:1px solid var(--line-2);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:9px 12px;outline:none">
       </div>
     </div>
   </section>
@@ -374,7 +409,7 @@
 </footer>
 
 <div class="modal-bg" id="modalBg">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-head"><h3 id="modalTitle">Preliminary quote request</h3><button class="x" id="modalX" aria-label="Close">✕</button></div>
     <div class="modal-body">
       <div class="quote-pre" id="quoteText"></div>
@@ -657,10 +692,14 @@ const $ = id=>document.getElementById(id);
 const fmt = n => '$'+Math.round(n).toLocaleString();
 const fmtK = n => '$'+(n/1000).toFixed(0)+'k';
 
+/* sane bounds so a stray keystroke can't produce a 9-million-VM rack */
+const NUM_BOUNDS = { vms:[0,100000], users:[0,1000000], data:[0,1000000], vdi:[0,200000] };
+function clampNum(id,raw){ const b=NUM_BOUNDS[id]; let v=+raw||0; if(b) v=Math.min(b[1],Math.max(b[0],v)); return v; }
+function clampField(id){ const el=$(id); if(el) el.value=clampNum(id,el.value); }
 function readInputs(){
-  return { vms:+$('vms').value||0, users:+$('users').value||0, data:+$('data').value||0,
-    vdi:+$('vdi').value||0, growth:+$('growth').value||0,
-    ai:$('ai').value, db:$('db').value, res:$('res').value };
+  return { vms:clampNum('vms',$('vms').value), users:clampNum('users',$('users').value),
+    data:clampNum('data',$('data').value), vdi:clampNum('vdi',$('vdi').value),
+    growth:+$('growth').value||0, ai:$('ai').value, db:$('db').value, res:$('res').value };
 }
 
 function renderRack(rec){
@@ -724,7 +763,7 @@ function renderCompare(rec,inp){
   const t=tco(rec);
   $('compare').innerHTML=`
   <div class="col legacy">
-    <div class="col-head"><div class="tag">Keep what you have</div><div class="ct2">Status quo / aging on-prem</div></div>
+    <div class="col-head"><div class="tag">Keep what you have · modeled estimate</div><div class="ct2">Status quo / aging on-prem</div></div>
     <div class="col-body">
       <div class="crow"><span class="k">Power efficiency</span><span class="v bad">~${A.sqPowerMult}× higher</span></div>
       <div class="crow"><span class="k">Annual power &amp; cooling</span><span class="v bad">${fmt(t.sqPowerYr)}</span></div>
@@ -745,6 +784,10 @@ function renderCompare(rec,inp){
       <div class="crow"><span class="k">Year-3 emergency refresh</span><span class="v good">not needed</span></div>
     </div>
   </div>`;
+  $('compareNote').innerHTML =
+    `<b>How the status-quo column is built:</b> these are <b>modeled planning figures</b>, not measured from the customer's current gear — calibrate them per account in <a onclick="$('assumpPanel').open=true;$('assumpPanel').scrollIntoView({behavior:'smooth'})">Assumptions</a>. `+
+    `Power assumes legacy draw at <b>${A.sqPowerMult}×</b> the proposed stack (${fmt(t.sqPowerYr)}/yr vs ${fmt(t.powerYr)}/yr). `+
+    `Risk assumes <b>${A.sqBreakfixPct}%/yr</b> break-fix on out-of-warranty hardware and a <b>year-3 emergency refresh</b> at ${A.sqRefreshFactor}× the proposed capex. Adjust any of these and every figure here recalculates live.`;
 }
 
 function renderTCO(rec){
@@ -768,7 +811,7 @@ function renderTCO(rec){
     <div class="bigstat"><div class="bl">4-yr Dell TCO</div><div class="bv">${fmt(t.dell.total)}</div>
       <div class="bn">${fmt(t.netCap)} hardware (net) + ${fmt(t.dell.support)} support + ${fmt(t.dell.power)} power</div></div>
     <div class="bigstat"><div class="bl">4-yr advantage vs. status quo</div><div class="bv save">${save>0?fmt(save):'—'}</div>
-      <div class="bn">${pct>0?`~${pct}% lower lifetime cost — efficiency + avoided emergency refresh`:'comparable; the win is capability & risk'}</div></div>
+      <div class="bn">${pct>0?`~${pct}% lower lifetime cost. Status quo ${fmt(t.sq.total)} modeled as ${fmt(t.sq.power)} power + ${fmt(t.sq.support)} break-fix + ${fmt(t.sq.risk)} yr-3 refresh — all editable above.`:'comparable on cost; the win is capability & risk'}</div></div>
     <div class="bigstat"><div class="bl">Annual energy saved</div><div class="bv">${fmt(t.sqPowerYr-t.powerYr)}</div>
       <div class="bn">newer silicon + right-sized cooling at $${A.powerRate}/kWh, PUE ${A.pue}</div></div>`;
 
@@ -851,48 +894,136 @@ function updateCfgSummary(){
     <span>List <span class="price">${fmt(nodePrice)}</span>/node <span style="color:var(--faint)">(base ${fmt(A.pR760)} + CPU/RAM/OS/NIC/disk)</span></span>`;
 }
 
+/* ============================ SHAREABLE STATE ============================ */
+/* Encodes the full design (inputs + build config + any edited assumptions) into the
+   URL hash so a rep can send a link that reopens the exact architecture. Only the
+   assumption *deltas* from DEFAULTS are stored, keeping links short. */
+function collectState(){
+  const aDelta={}; Object.keys(DEFAULTS).forEach(k=>{ if(A[k]!==DEFAULTS[k]) aDelta[k]=A[k]; });
+  return { i:readInputs(), c:{...CONFIG}, a:aDelta };
+}
+function encodeState(st){
+  try{ return btoa(unescape(encodeURIComponent(JSON.stringify(st)))).replace(/=+$/,''); }
+  catch(e){ return ''; }
+}
+function decodeState(s){
+  try{ return JSON.parse(decodeURIComponent(escape(atob(s)))); }
+  catch(e){ return null; }
+}
+function shareURL(){
+  const base=location.href.split('#')[0].split('?')[0];
+  const q = REP ? ('?rep='+encodeURIComponent(REP)) : '';
+  return base + q + '#s=' + encodeState(collectState());
+}
+function applyState(st){
+  if(!st) return;
+  if(st.i){ const i=st.i, set=(id,v)=>{ if(v!==undefined && $(id)) $(id).value=v; };
+    set('vms',i.vms); set('users',i.users); set('data',i.data); set('vdi',i.vdi);
+    set('growth',i.growth); set('ai',i.ai); set('db',i.db); set('res',i.res);
+    if(i.growth!==undefined) $('growthVal').textContent=i.growth+'%';
+  }
+  if(st.c){ CONFIG={...CONFIG, ...st.c}; CONFIG.ram=+CONFIG.ram;
+    CONFIG.storeTargetTB=Math.max(0,+CONFIG.storeTargetTB||0); }
+  if(st.a){ A={...DEFAULTS, ...st.a}; }
+}
+function loadFromURL(){
+  const m=location.hash.match(/[#&]s=([^&]+)/); if(!m) return false;
+  const st=decodeState(m[1]); if(!st) return false;
+  applyState(st); return true;
+}
+function flashBtn(id,msg){ const b=$(id), o=b.textContent; b.textContent=msg; setTimeout(()=>{b.textContent=o;},1600); }
+
 /* ============================ WIRE-UP ============================ */
 let lastRec=null;
+/* the rep sets their email once (in-app field, remembered on this device) — it rides
+   along on every share link so leads route back to them. A ?rep= in the URL wins and
+   is also persisted, so opening someone's rep link adopts their address. */
+function loadRep(){ try{ return (localStorage.getItem('wa_rep')||'').trim(); }catch(e){ return ''; } }
+function saveRep(v){ try{ localStorage.setItem('wa_rep',v); }catch(e){} }
+const urlRep = (new URLSearchParams(location.search).get('rep') || '').trim();
+let REP = urlRep || loadRep();
+if(urlRep) saveRep(urlRep);
+function refreshRepLabel(){ $('refineBtn').textContent = REP ? 'Email my Dell rep' : 'Refine with my Dell rep'; }
 function run(){
   const inp=readInputs(); const rec=recommend(inp); lastRec=rec;
   renderRack(rec); renderStack(rec); renderReality(rec); renderPerf(rec);
   renderCompare(rec,inp); renderTCO(rec);
 }
 
+function applyTemplate(t){
+  $('vms').value=t.v.vms; $('users').value=t.v.users; $('data').value=t.v.data;
+  $('vdi').value=t.v.vdi; $('growth').value=t.v.growth; $('growthVal').textContent=t.v.growth+'%';
+  $('ai').value=t.v.ai; $('db').value=t.v.db; $('res').value=t.v.res;
+}
 function renderTpls(active){
   $('tpls').innerHTML = TEMPLATES.map(t=>
     `<button class="tpl${active===t.id?' active':''}" data-id="${t.id}"><span class="tn">${t.name}</span><span class="td">${t.desc}</span></button>`).join('');
   document.querySelectorAll('.tpl').forEach(b=>b.addEventListener('click',()=>{
     const t=TEMPLATES.find(x=>x.id===b.dataset.id);
-    $('vms').value=t.v.vms; $('users').value=t.v.users; $('data').value=t.v.data;
-    $('vdi').value=t.v.vdi; $('growth').value=t.v.growth; $('growthVal').textContent=t.v.growth+'%';
-    $('ai').value=t.v.ai; $('db').value=t.v.db; $('res').value=t.v.res;
+    applyTemplate(t);
     renderTpls(t.id); run(); $('outPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
   }));
 }
 
 ['vms','users','data','vdi','ai','db','res'].forEach(id=>$(id).addEventListener('input',()=>{renderTpls(null);run();}));
+['vms','users','data','vdi'].forEach(id=>$(id).addEventListener('change',()=>{clampField(id);run();}));
 $('growth').addEventListener('input',e=>{$('growthVal').textContent=e.target.value+'%'; renderTpls(null); run();});
 $('buildBtn').addEventListener('click',()=>{run(); $('realitySec').scrollIntoView({behavior:'smooth'});});
+$('resetInputs').addEventListener('click',()=>{ applyTemplate(TEMPLATES[0]); renderTpls('k12'); run(); $('inputPanel').scrollIntoView({behavior:'smooth',block:'nearest'}); });
+$('repEmail').value = REP;
+$('repEmail').addEventListener('input',e=>{ REP=e.target.value.trim(); saveRep(REP); refreshRepLabel(); });
 
-function openModal(title,body){ $('modalTitle').textContent=title; $('quoteText').textContent=body; $('modalBg').classList.add('show'); }
-function closeModal(){ $('modalBg').classList.remove('show'); }
+let lastFocus=null;
+function modalButtons(){ return [...$('modalBg').querySelectorAll('button')].filter(b=>b.offsetParent!==null); }
+function openModal(title,body){
+  lastFocus=document.activeElement;
+  $('modalTitle').textContent=title; $('quoteText').textContent=body;
+  $('modalBg').classList.add('show');
+  const b=modalButtons(); if(b.length) b[0].focus();
+}
+function closeModal(){ $('modalBg').classList.remove('show'); if(lastFocus&&lastFocus.focus) lastFocus.focus(); }
 $('quoteBtn').addEventListener('click',()=>{ if(!lastRec)run(); openModal('Preliminary quote request', buildQuote(lastRec,readInputs())); });
 $('refineBtn').addEventListener('click',()=>{ if(!lastRec)run();
-  const body='SEND TO YOUR DELL REP\n'+'='.repeat(56)+'\n\nSubject: Refine my Workload Architect design\n\n'+
-    'Hi [rep] — I roughed out an architecture with Workload Architect AI and\n'+
-    'would like to refine it together. Full BOM and reality check below.\n\n'+buildQuote(lastRec,readInputs());
-  openModal('Refine with my Dell rep', body); });
+  const subject='Refine my Workload Architect design';
+  const intro='Hi — I roughed out an architecture with Workload Architect AI and would like to refine it together. Full BOM and reality check below.\n\n';
+  const quote=buildQuote(lastRec,readInputs());
+  if(REP){
+    // one-click handoff straight into the customer's mail client, addressed to the rep
+    window.location.href='mailto:'+encodeURIComponent(REP)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(intro+quote);
+  } else {
+    openModal('Refine with my Dell rep',
+      'SEND TO YOUR DELL REP\n'+'='.repeat(56)+'\n\nSubject: '+subject+'\n\n'+intro+quote);
+  }
+});
+$('shareBtn').addEventListener('click',()=>{
+  const url=shareURL();
+  history.replaceState(null,'',url);                 // reflect the design in the address bar
+  if(navigator.clipboard){ navigator.clipboard.writeText(url)
+    .then(()=>flashBtn('shareBtn','Link copied ✓'))
+    .catch(()=>openModal('Shareable link — copy this URL', url)); }
+  else openModal('Shareable link — copy this URL', url);
+});
+$('pdfBtn').addEventListener('click',()=>window.print());
 $('modalX').addEventListener('click',closeModal);
 $('closeBtn').addEventListener('click',closeModal);
 $('modalBg').addEventListener('click',e=>{if(e.target===$('modalBg'))closeModal();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('modalBg').classList.contains('show'))closeModal();});
+$('modalBg').addEventListener('keydown',e=>{
+  if(e.key!=='Tab') return;
+  const b=modalButtons(); if(!b.length) return;
+  const first=b[0], last=b[b.length-1];
+  if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+});
 $('copyBtn').addEventListener('click',()=>{ const txt=$('quoteText').textContent;
   navigator.clipboard?.writeText(txt).then(()=>{$('copyBtn').textContent='Copied ✓';setTimeout(()=>$('copyBtn').textContent='Copy to clipboard',1600);})
     .catch(()=>{const r=document.createRange();r.selectNode($('quoteText'));window.getSelection().removeAllRanges();window.getSelection().addRange(r);}); });
 
-// init
-renderTpls('k12'); renderAssumptions(); renderConfig(); run();
+// init — a shared link (#s=...) restores the exact design; otherwise default to K-12
+const restored = loadFromURL();
+if(!restored) applyTemplate(TEMPLATES[0]);            // keep the K-12 highlight in sync with the inputs
+refreshRepLabel();
+renderTpls(restored ? null : 'k12'); renderAssumptions(); renderConfig(); run();
 </script>
 </body>
 </html>
