@@ -584,9 +584,11 @@ function recommend(inp){
   let nodesVM  = inp.vms>0 ? Math.ceil(inp.vms / vmsPerNode) : 0;
   let nodesVDI = inp.vdi>0 ? Math.ceil(inp.vdi / vdiPerNode) : 0;
   let computeNodes = nodesVM + nodesVDI;
-  if((inp.vms>0||inp.users>0||inp.vdi>0) && computeNodes<2) computeNodes=2; // min cluster for HA
-  if(inp.res==='n1') computeNodes += 1;
-  if(inp.res==='dual') computeNodes = Math.max(computeNodes,2)*2;           // mirrored sites
+  const anyWorkload = inp.vms>0||inp.users>0||inp.vdi>0;
+  if(anyWorkload && computeNodes<1) computeNodes=1;                         // any workload needs ≥1 node
+  // resilience target drives the HA floor — a small single-site workload can land on ONE server
+  if(inp.res==='n1')        computeNodes = Math.max(computeNodes,1) + 1;    // N+1: one spare beyond the load
+  else if(inp.res==='dual') computeNodes = Math.max(computeNodes,1) * 2;    // mirrored across two sites
   const cm = computeNodes>=6 ? HW.computeSm : HW.compute;                   // dense 1U for big fleets
   if(computeNodes>0){
     const nodeKw = 0.55 + cpu.kwEach*2;                                     // chassis/mem/fans + CPUs
@@ -676,7 +678,8 @@ function recommend(inp){
 
   if(inp.res==='n1'){ W.push({lvl:'ok', t:`<b>N+1 satisfied:</b> one compute node can fail with zero workload impact. Dual PSUs and dual switches remove single points of failure.`}); }
   if(inp.res==='dual'){ W.push({lvl:'warn', t:`Two-site replication needs a <b>WAN link of 1–10 Gbps</b> sized to your change rate. Confirm circuit and RPO/RTO before choosing async vs. sync (PowerStore Metro).`}); }
-  if(inp.res==='single'){ W.push({lvl:'warn', t:`Single-site, basic HA only — a node failure degrades capacity. For SIS/EHR/911 workloads, stepping to N+1 is cheap insurance.`}); }
+  if(inp.res==='single' && computeNodes<=1){ W.push({lvl:'warn', t:`<b>Single server — no failover.</b> A hardware fault is an outage until it's repaired (dual PSUs/fans and ProSupport next-business-day help, but won't keep workloads running). Sensible for a small or non-critical site; for SIS/EHR/911, step up to N+1 to add a spare node.`}); }
+  else if(inp.res==='single'){ W.push({lvl:'warn', t:`Single-site cluster of <b>${computeNodes} nodes</b> with basic HA — a node failure degrades capacity but stays up. For SIS/EHR/911 workloads, N+1 adds a dedicated spare so there's zero impact.`}); }
 
   if(!hasStore){
     W.push({lvl:'warn', t:`<b>Primary storage excluded</b> — this quote assumes you reuse an existing SAN/array. Confirm it has headroom for ~<b>${Math.round(autoUsableTB).toLocaleString()}TB usable</b> (~${Math.round(autoUsableTB*A.drr).toLocaleString()}TB effective) and ~<b>${(iops/1000).toFixed(0)}k IOPS</b> by year 4, and that the fabric reaches every new node — shared storage is required for HA / live migration.`});
