@@ -1,0 +1,9 @@
+{
+  "name": "dell-workload-architect",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Workload Architect AI — Dell PowerEdge / PowerStore pre-sales sizing engine",
+  "scripts": {
+    "test": "node --test"
+  }
+}
