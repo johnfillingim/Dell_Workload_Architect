@@ -432,8 +432,8 @@ const TEMPLATES = [
 /* ============================ EDITABLE ASSUMPTIONS ============================ */
 /* defaults — every one is exposed in the Assumptions panel and re-runs the engine on change */
 const DEFAULTS = {
-  // sizing
-  vmsPerNode:40, vdiPerNode:120, coresPerNode:64, ramPerNodeTB:1,
+  // sizing — per-node capacity is DERIVED from the chosen CPU cores & RAM via these ratios
+  vcpuPerVM:4, ramPerVMGB:12, vcpuPerSeat:1, ramPerVDIGB:4, vcpuPerCore:4,
   // storage
   drr:3, avgDriveTB:15.36, usableFactor:0.85,
   // energy & support
@@ -449,9 +449,12 @@ const DEFAULTS = {
 let A = {...DEFAULTS};
 
 const ASSUMP_GROUPS = [
-  {title:'Sizing ratios (calibrate to your own deals)', fields:[
-    {k:'vmsPerNode',l:'VMs per compute node',s:1},
-    {k:'vdiPerNode',l:'VDI seats per node',s:5},
+  {title:'Sizing ratios (node capacity is derived from the chosen CPU & RAM)', fields:[
+    {k:'vcpuPerVM',l:'vCPU per server VM',s:1},
+    {k:'ramPerVMGB',l:'RAM per server VM (GB)',s:2},
+    {k:'vcpuPerSeat',l:'vCPU per VDI seat',s:0.5},
+    {k:'ramPerVDIGB',l:'RAM per VDI seat (GB)',s:1},
+    {k:'vcpuPerCore',l:'vCPU per physical core (oversubscription)',s:0.5},
   ]},
   {title:'Storage model', fields:[
     {k:'drr',l:'Data reduction ratio (X:1) — Dell guarantees up to 5',s:0.5},
@@ -507,7 +510,7 @@ const STORE = [
   {model:'PowerStore 9200T',cores:112, u:2, kw:1.8, lbs:88, pk:'p9200T'},
 ];
 const SHELF = {u:2, kw:0.4, lbs:60, drives:24}; // ENS24 expansion enclosure
-const BASE_DRIVES = 25, MAX_SHELVES = 3;
+const BASE_SLOTS = 25, SHELF_SLOTS = SHELF.drives, MAX_SHELVES = 3, MIN_DRIVES = 6;
 
 /* ============================ COMPONENT CATALOGS ============================ */
 /* Customer-selectable internals for the compute cluster. Prices = Dell list $ (per node).
@@ -557,11 +560,18 @@ function recommend(inp){
   // ---- compute sizing (internals from CONFIG) ----
   const cpu=find(CPUS,CONFIG.cpu), ram=RAMS.find(r=>r.gb===+CONFIG.ram)||RAMS[1],
         os=find(OSES,CONFIG.os), nic=find(NICS,CONFIG.nic), local=find(LOCALS,CONFIG.local);
-  const nodeCores = cpu.coresEach*2, nodeRamTB = ram.gb/1024;
-  let nodesVM  = inp.vms>0 ? Math.ceil(inp.vms / A.vmsPerNode) : 0;
-  let nodesVDI = inp.vdi>0 ? Math.ceil(inp.vdi / A.vdiPerNode) : 0;
+  const nodeCores = cpu.coresEach*2, nodeRamGB = ram.gb, nodeRamTB = ram.gb/1024;
+  // per-node capacity follows the ACTUAL build: bounded by either cores (with oversubscription) or RAM
+  const vmCoreCap  = Math.floor(nodeCores * A.vcpuPerCore / A.vcpuPerVM);
+  const vmRamCap   = Math.floor(nodeRamGB / A.ramPerVMGB);
+  const vmsPerNode = Math.max(1, Math.min(vmCoreCap, vmRamCap));
+  const seatCoreCap= Math.floor(nodeCores * A.vcpuPerCore / A.vcpuPerSeat);
+  const seatRamCap = Math.floor(nodeRamGB / A.ramPerVDIGB);
+  const vdiPerNode = Math.max(1, Math.min(seatCoreCap, seatRamCap));
+  let nodesVM  = inp.vms>0 ? Math.ceil(inp.vms / vmsPerNode) : 0;
+  let nodesVDI = inp.vdi>0 ? Math.ceil(inp.vdi / vdiPerNode) : 0;
   let computeNodes = nodesVM + nodesVDI;
-  if((inp.vms>0||inp.users>0) && computeNodes<2) computeNodes=2;            // min cluster for HA
+  if((inp.vms>0||inp.users>0||inp.vdi>0) && computeNodes<2) computeNodes=2; // min cluster for HA
   if(inp.res==='n1') computeNodes += 1;
   if(inp.res==='dual') computeNodes = Math.max(computeNodes,2)*2;           // mirrored sites
   const cm = computeNodes>=6 ? HW.computeSm : HW.compute;                   // dense 1U for big fleets
@@ -593,26 +603,32 @@ function recommend(inp){
   const grow = Math.pow(1+inp.growth/100, 4);
   const autoUsableTB = ((inp.data + inp.vdi*0.05) * grow * 1.3) / A.drr;   // workload-derived usable need @ yr4
   const targetUsableTB = CONFIG.storeTargetTB>0 ? CONFIG.storeTargetTB : autoUsableTB;
+  // size the DRIVE COUNT to the actual need (not a fixed full base), then place drives across enclosures
   const physPerDrive = A.avgDriveTB * A.usableFactor;
-  const physBase = BASE_DRIVES * physPerDrive;
-  const physPerShelf = SHELF.drives * physPerDrive;
-  let shelves = Math.max(0, Math.ceil((targetUsableTB - physBase) / physPerShelf));
-  let appliances = 1;
-  if(shelves > MAX_SHELVES){ appliances = Math.ceil((shelves+1)/(MAX_SHELVES+1)); shelves = MAX_SHELVES; }
+  const slotsPerAppliance = BASE_SLOTS + MAX_SHELVES*SHELF_SLOTS;          // 25 in-chassis + 3×24 = 97
+  const drivesNeeded = Math.max(MIN_DRIVES, Math.ceil(targetUsableTB / physPerDrive));
+  let appliances = Math.max(1, Math.ceil(drivesNeeded / slotsPerAppliance));
+  const drivesPer = Math.max(MIN_DRIVES, Math.ceil(drivesNeeded / appliances));
+  let shelves = drivesPer>BASE_SLOTS ? Math.ceil((drivesPer-BASE_SLOTS)/SHELF_SLOTS) : 0;
   const dual = inp.res==='dual';
   const storeQty = (dual?2:1)*appliances;
-  const usableTB = (physBase + shelves*physPerShelf) * appliances;
+  const totalDrives = drivesPer*appliances;
+  const usableTB = drivesPer * physPerDrive * appliances;
   const effectiveTB = usableTB * A.drr;
 
-  out.store={tier, model:pick.model, qty:storeQty, shelves, effectiveTB, usableTB, iops};
+  out.store={tier, model:pick.model, qty:storeQty, shelves, effectiveTB, usableTB, iops, drives:totalDrives};
   out.items.push({...pick, type:'store', qty:storeQty,
     u:pick.u + shelves*SHELF.u, kw:pick.kw + shelves*SHELF.kw, lbs:pick.lbs + shelves*SHELF.lbs,
-    desc:`~${Math.round(usableTB).toLocaleString()}TB usable / ~${Math.round(effectiveTB).toLocaleString()}TB effective @ ${A.drr}:1${dual?' · async replicated':''}${shelves?` · +${shelves} ENS24`:''}`,
+    desc:`~${Math.round(usableTB).toLocaleString()}TB usable / ~${Math.round(effectiveTB).toLocaleString()}TB effective @ ${A.drr}:1 · ${totalDrives}× ${A.avgDriveTB}TB NVMe${dual?' · async replicated':''}${shelves?` · +${shelves} ENS24`:''}`,
     role:'Primary unified storage (NVMe)',
     price: A[pick.pk] + shelves*A.pShelf });
 
-  // ---- networking ----
-  out.items.push({...HW.net, type:'net', qty:2, desc:'25/100GbE leaf pair · redundant fabric', role:'Data fabric', price:A.pNet});
+  // ---- networking: scale leaf pairs to port count (48×25G per S5248F), min a redundant pair ----
+  const aiNodes = out.items.filter(i=>i.type==='ai').reduce((s,i)=>s+i.qty,0);
+  const portsNeeded = (computeNodes + aiNodes + storeQty) * 2;             // dual-homed for redundancy
+  let leaves = Math.max(2, Math.ceil(portsNeeded/48));
+  if(leaves%2) leaves++;                                                   // keep leaves in redundant pairs
+  out.items.push({...HW.net, type:'net', qty:leaves, desc:`25/100GbE leaf fabric · ${leaves/2} redundant pair${leaves>2?'s':''}`, role:'Data fabric', price:A.pNet});
   out.items.push({...HW.mgmt, type:'net', qty:1, desc:'iDRAC / out-of-band management', role:'Management', price:A.pMgmt});
 
   // resolve prices for compute/ai items (they used pk keys)
@@ -646,13 +662,14 @@ function recommend(inp){
   if(appliances>1){ W.push({lvl:'warn', t:`Capacity exceeds a single appliance (base + 3 enclosures). Modeled as <b>${appliances} clustered appliances</b> — or raise avg drive size in Assumptions to consolidate.`}); }
   else if(autoUsableTB > usableTB*0.9){ W.push({lvl:'warn', t:`At ${inp.growth}%/yr you'll approach this array's usable capacity by year 4. Size the next enclosure now, or revisit the ${A.drr}:1 reduction assumption.`}); }
 
-  // chosen RAM vs VM density
-  const vmsPerNodeByRam = Math.floor(nodeRamTB*1024/16);                    // ~16GB avg VM
-  const densityTarget = computeNodes>0 ? Math.ceil((inp.vms+inp.vdi)/computeNodes) : 0;
-  if(densityTarget>0 && vmsPerNodeByRam < densityTarget){
-    W.push({lvl:'warn', t:`Each node's <b>${ram.label}</b> supports ~${vmsPerNodeByRam} VMs at 16GB avg — but you're packing ~${densityTarget}/node. Bump RAM or add nodes, or you'll swap to disk.`});
-  } else if(densityTarget>0){
-    W.push({lvl:'ok', t:`<b>${ram.label}/node</b> comfortably holds your ~${densityTarget} VMs/node with memory headroom.`});
+  // node density — the cluster is already sized to the chosen build, so report what bounds each node
+  if(inp.vms>0){
+    const bind = vmRamCap<=vmCoreCap ? `RAM (${ram.label} ÷ ${A.ramPerVMGB}GB/VM)` : `cores (${nodeCores} ÷ ${A.vcpuPerVM} vCPU/VM at ${A.vcpuPerCore}:1)`;
+    const perNode = Math.ceil(inp.vms/Math.max(1,nodesVM));
+    W.push({lvl:'ok', t:`The selected build holds ~<b>${vmsPerNode} VMs/node</b> (bound by ${bind}); your ${inp.vms} VMs land at ~${perNode}/node. Change CPU or RAM and the cluster re-sizes automatically.`});
+  }
+  if(inp.vdi>0){
+    W.push({lvl:'ok', t:`Each node hosts ~<b>${vdiPerNode} VDI seats</b> on this build (${A.ramPerVDIGB}GB & ${A.vcpuPerSeat} vCPU per seat) — ${nodesVDI} node${nodesVDI>1?'s':''} for ${inp.vdi} seats.`});
   }
   // explicit storage target vs workload need
   if(CONFIG.storeTargetTB>0 && CONFIG.storeTargetTB < autoUsableTB){
